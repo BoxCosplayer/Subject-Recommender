@@ -96,7 +96,7 @@ The licensing placs are as follows:
 - Community Edition: [AGPL-3.0](./LICENSE) — free to use, modify, and self-host. If you run a modified version as a service, you must release your modifications under the AGPL.
 - Commercial License: available for teams who want to use Roundtable in commercial products or connect it to proprietary systems without open-sourcing changes. Includes support and additional terms.
 
-To discuss a commercial licensing, contact: rajveer@sandhuhome.uk
+To discuss potential commercial licensing, contact: rajveer@sandhuhome.uk
 
 ## Roadmap / TODO
 
