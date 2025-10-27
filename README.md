@@ -86,6 +86,18 @@ The library and CLI scaffolding live under `src/subject_recommender/` (CLI stub 
 - Type check: `mypy src`
 - Tests: `pytest -q` (the current algorithm is exercised by a runnable script rather than assertions)
 
+## License
+
+SubjectRecommender is currently licensed under [AGPL-3.0](./LICENSE).
+
+The plans are to eventually dual-license this sofware once primary functionality is established.
+The licensing placs are as follows:
+
+- Community Edition: [AGPL-3.0](./LICENSE) — free to use, modify, and self-host. If you run a modified version as a service, you must release your modifications under the AGPL.
+- Commercial License: available for teams who want to use Roundtable in commercial products or connect it to proprietary systems without open-sourcing changes. Includes support and additional terms.
+
+To discuss a commercial licensing, contact: rajveer@sandhuhome.uk
+
 ## Roadmap / TODO
 
 - Integrate date‑based weightings (recency decay).
