@@ -1,0 +1,92 @@
+[
+    {
+        "subject": "Maths",
+        "type": "Quiz",
+        "score": 85,
+        "date": "2025-03-04"
+    },
+    {
+        "subject": "English Language",
+        "type": "Topic Test",
+        "score": 90,
+        "date": "2025-03-01"
+    },
+    {
+        "subject": "Biology",
+        "type": "Homework",
+        "score": 92,
+        "date": "2025-02-28"
+    },
+    {
+        "subject": "Chemistry",
+        "type": "Mock Exam",
+        "score": 87,
+        "date": "2025-02-25"
+    },
+    {
+        "subject": "Physics",
+        "type": "Exam",
+        "score": 45,
+        "date": "2025-02-20"
+    },
+    {
+        "subject": "Maths",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "English Language",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "English Literature",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "Biology",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "Chemistry",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "Physics",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "History",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "Geography",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "Computer Science",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    },
+    {
+        "subject": "French",
+        "type": "Revision",
+        "score": 75,
+        "date": "2025-10-27"
+    }
+]
