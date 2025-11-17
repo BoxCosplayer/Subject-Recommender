@@ -11,8 +11,8 @@ MOCK_EXAM_WEIGHT = 0.5
 EXAM_WEIGHT = 0.6
 
 # Define default and result weights for the overall weighting system
-default_weight = 0.7  # Weight for default values
-result_weight = 0.3   # Weight for any results.json values
+default_weight = 0.7  # Weight for results procured by the system choosing a subject
+result_weight = 0.3  # Weight for any past results
 
 # Manually setting default values for each subject
 # Default weights represent the confidence of a user in a subject, or predicted grades
@@ -26,11 +26,11 @@ gcse_dict = {
     "History": 0.9,
     "Geography": 0.7,
     "Computer Science": 0.4,
-    "French": 0.6
+    "French": 0.6,
 }
 
+
 def update_system_performance(system_performance):
-        
     # Open and read the JSON file
     with open("input-results.json") as file:
         data = json.load(file)
@@ -42,7 +42,7 @@ def update_system_performance(system_performance):
     # Calculate weighted scores based on type of test
     for entry in data:
         subject = entry["subject"]
-        score = entry["score"]
+        grade = entry["score"]
         test_type = entry["type"]
 
         # Determine weight based on test type
@@ -60,30 +60,30 @@ def update_system_performance(system_performance):
                 weight = EXAM_WEIGHT
 
         # Adjust weight if the score is less / more than a target score
-        target_score = 80
+        target_grade = 80
 
-        if score < target_score:
-            x = target_score - score
-            y = (1 / 100) * (x ** 2)
-            adjusted_weight = weight * (1 + y/100) 
-        elif score > target_score:
-            x = score - target_score
-            y = x / 6
-            adjusted_weight = weight * (1 + y/10) 
+        if grade < target_grade:
+            grade_target_difference = target_grade - grade
+            x = (1 / 100) * (grade_target_difference**2)
+            adjusted_weight = weight * (1 + x / 100)
+        elif grade > target_grade:
+            grade_target_difference = grade - target_grade
+            x = grade_target_difference / 6
+            adjusted_weight = weight * (1 + x / 10)
         else:
             adjusted_weight = weight
 
         # print(adjusted_weight)
 
         # Apply the adjusted weight to the score
-        weighted_score = score * adjusted_weight
+        wGrade = grade * adjusted_weight
 
         # Accumulate weighted scores and count
         if subject in subject_scores:
-            subject_scores[subject] += weighted_score
+            subject_scores[subject] += wGrade
             subject_counts[subject] += weight
         else:
-            subject_scores[subject] = weighted_score
+            subject_scores[subject] = wGrade
             subject_counts[subject] = weight
 
     # Create a new dictionary with weighted average scores
@@ -91,14 +91,15 @@ def update_system_performance(system_performance):
         if subject in subject_scores:
             # Calculate the weighted average score
             avg_score = (subject_scores[subject] / subject_counts[subject]) / 100
-            weighted_avg_score = avg_score * result_weight
+            wAvg_score = avg_score * result_weight
 
-            weighted_default = system_performance[subject] * default_weight
+            wDefault = system_performance[subject] * default_weight
             # Combine with default value using the overall weights
-            weighted_avg = weighted_default + weighted_avg_score
-            system_performance[subject] = math.floor(weighted_avg * 100) / 100
+            wAvg = wDefault + wAvg_score
+            system_performance[subject] = math.floor(wAvg * 100) / 100
 
     return system_performance
+
 
 gcse_dict = update_system_performance(gcse_dict)
 
@@ -109,17 +110,17 @@ print(gcse_dict, "\n")
 
 # ---------------------- Normalise the scores ----------------------
 
-def normalise(system_performance):
 
+def normalise(system_performance):
     total_score = sum(system_performance.values())
 
     # Normalize each score to sum up to 1 while keeping relative differences
-    normalized_scores = {subject: score / total_score for subject, score in system_performance.items()}
+    normalised_scores = {subject: score / total_score for subject, score in system_performance.items()}
 
-    # print("normalized_scores:")
-    # print(normalized_scores)
+    # print("normalised_scores:")
+    # print(normalised_scores)
 
-    return min(normalized_scores, key=normalized_scores.get)
+    return min(normalised_scores, key=lambda subject: normalised_scores[subject])
 
 
 no_sessions = 13
@@ -133,12 +134,12 @@ local_gcse_dict = gcse_dict.copy()
 
 for _i in range(no_sessions):
     lowest_subject = normalise(local_gcse_dict)
-    #print(lowest_subject)
+    # print(lowest_subject)
     study_session_record.append(lowest_subject)
 
     for subject in local_gcse_dict:
         if subject == lowest_subject:
-            local_gcse_dict[subject] += (0.005 * (2.5 * session_time - break_time))
+            local_gcse_dict[subject] += 0.005 * (2.5 * session_time - break_time)
         else:
             local_gcse_dict[subject] -= 0.01
 
@@ -161,21 +162,11 @@ for subject in gcse_dict:
     if subject in study_session_record:
         # If studied, add entry with "Revision" type and calculated score
         score = 2 * session_time - break_time
-        new_entry = {
-            "subject": subject,
-            "type": "Revision",
-            "score": score,
-            "date": current_date
-        }
+        new_entry = {"subject": subject, "type": "Revision", "score": score, "date": current_date}
     else:
         # If not studied, add entry with negative score based on break time
         score = -1 * break_time
-        new_entry = {
-            "subject": subject,
-            "type": "Not Studied",
-            "score": score,
-            "date": current_date
-        }
+        new_entry = {"subject": subject, "type": "Not Studied", "score": score, "date": current_date}
 
     # Append the new entry to the data
     data.append(new_entry)
