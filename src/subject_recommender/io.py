@@ -53,7 +53,7 @@ def get_session_defaults() -> dict[str, int]:
         "count": config.SESSION_COUNT,
         "session_time": config.SESSION_TIME_MINUTES,
         "break_time": config.BREAK_TIME_MINUTES,
-        "spins": config.SPINS,
+        "shots": config.SHOTS,
     }
 
 

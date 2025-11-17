@@ -21,9 +21,9 @@ def test_format_plan_lists_subjects_in_order() -> None:
 
     plan = SessionPlan(subjects=["Maths", "History"], new_entries=[], history=[])
 
-    formatted = cli._format_plan(plan, spin_number=1)
+    formatted = cli._format_plan(plan, shot_number=1)
 
-    assert "spin 1" in formatted
+    assert "shot 1" in formatted
     assert "1. Maths" in formatted
     assert "2. History" in formatted
 
@@ -51,7 +51,7 @@ def test_analyse_run_reports_frequency_and_patterns() -> None:
     assert analysis["longest_streak"] == 2
     assert analysis["first_repeat_position"] == 2
     assert analysis["recommended_session_cap"] == 1
-    assert analysis["spins"] == 1
+    assert analysis["shots"] == 1
 
 
 def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,7 +63,7 @@ def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch
     summary = cli._format_analysis(plans)
 
     assert "Overall session insights" in summary
-    assert "Spins executed: 1" in summary
+    assert "Shots executed: 1" in summary
     assert "Subject frequency" in summary
     assert "First repeat detected at session 3" in summary
     assert "Suggested SESSION_COUNT cap" in summary
@@ -92,8 +92,8 @@ def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: 
     assert "Suggested SESSION_COUNT cap" in captured
 
 
-def test_main_handles_multiple_spins(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    """Ensure the CLI prints each spin separately when multiple plans are generated."""
+def test_main_handles_multiple_shots(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """Ensure the CLI prints each shot separately when multiple plans are generated."""
 
     plans = [
         SessionPlan(subjects=["Physics"], new_entries=[], history=[]),
@@ -105,6 +105,6 @@ def test_main_handles_multiple_spins(monkeypatch: pytest.MonkeyPatch, capsys: py
     cli.main()
 
     captured = capsys.readouterr().out.strip()
-    assert "spin 1" in captured
-    assert "spin 2" in captured
+    assert "shot 1" in captured
+    assert "shot 2" in captured
     assert "Overall session insights" in captured

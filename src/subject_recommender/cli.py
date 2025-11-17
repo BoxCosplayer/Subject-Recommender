@@ -14,7 +14,7 @@ from .sessions import generate_session_plan
 from .sessions.generator import SessionPlan
 
 
-def _format_plan(plan: SessionPlan, spin_number: int | None = None) -> str:
+def _format_plan(plan: SessionPlan, shot_number: int | None = None) -> str:
     """Return a newline-delimited representation of a session plan.
 
     Inputs: `plan` (`SessionPlan`) containing the ordered subject list.
@@ -24,8 +24,8 @@ def _format_plan(plan: SessionPlan, spin_number: int | None = None) -> str:
         return "No study sessions scheduled."
 
     header = "Study session plan"
-    if spin_number is not None:
-        header = f"{header} (spin {spin_number})"
+    if shot_number is not None:
+        header = f"{header} (shot {shot_number})"
 
     lines = [f"{header}:"]
     for index, subject in enumerate(plan.subjects, start=1):
@@ -34,7 +34,7 @@ def _format_plan(plan: SessionPlan, spin_number: int | None = None) -> str:
 
 
 def analyse_run(plans: list[SessionPlan]) -> dict[str, Any]:
-    """Return descriptive statistics for the full multi-spin run."""
+    """Return descriptive statistics for the full multi-shot run."""
     subjects = [subject for plan in plans for subject in plan.subjects]
     frequency = Counter(subjects)
     unique_subjects = len(frequency)
@@ -76,7 +76,7 @@ def analyse_run(plans: list[SessionPlan]) -> dict[str, Any]:
         "first_repeat_position": first_repeat_position,
         "recommended_session_cap": max(recommended_cap, 0),
         "total_sessions": len(subjects),
-        "spins": len(plans),
+        "shots": len(plans),
     }
 
 
@@ -95,7 +95,7 @@ def _format_analysis(plans: list[SessionPlan]) -> str:
     lines = [
         "",
         "Overall session insights:",
-        f"- Spins executed: {analysis['spins']}",
+        f"- Shots executed: {analysis['shots']}",
         f"- Total sessions scheduled: {analysis['total_sessions']}",
         f"- Unique subjects scheduled: {analysis['unique_subjects']}",
         f"- Subject frequency: {frequency_text}",
@@ -125,6 +125,6 @@ def main() -> None:
     """
     plans = generate_session_plan()
     for index, plan in enumerate(plans, start=1):
-        print(_format_plan(plan, spin_number=index if len(plans) > 1 else None))
+        print(_format_plan(plan, shot_number=index if len(plans) > 1 else None))
 
     print(_format_analysis(plans))

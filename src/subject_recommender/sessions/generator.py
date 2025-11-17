@@ -37,26 +37,26 @@ def generate_session_plan(
     history: Sequence[HistoryEntry] | None = None,
     session_parameters: Mapping[str, int] | None = None,
     session_date: str | None = None,
-    spins: int | None = None,
+    shots: int | None = None,
 ) -> list[SessionPlan]:
-    """Return one or more study plans, optionally running multiple spins per invocation.
+    """Return one or more study plans, optionally running multiple shots per invocation.
 
     Inputs:
         history: Sequence of history entries to seed the pipeline. Defaults to `io.get_study_history`.
-        session_parameters: Mapping with `count`, `session_time`, `break_time`, and optionally `spins`.
+        session_parameters: Mapping with `count`, `session_time`, `break_time`, and optionally `shots`.
         session_date: Optional ISO-formatted date string for new entries (defaults to today).
-        spins: Optional override controlling how many sequential plans to generate.
+        shots: Optional override controlling how many sequential plans to generate.
     Outputs:
-        list[SessionPlan] ordered by spin execution.
+        list[SessionPlan] ordered by shot execution.
     """
     local_history = _prepare_history(history)
     parameters = _resolve_session_parameters(session_parameters)
-    spin_count = spins if spins is not None else parameters.get("spins", 1)
-    spin_count = max(int(spin_count or 1), 1)
+    shot_count = shots if shots is not None else parameters.get("shots", 1)
+    shot_count = max(int(shot_count or 1), 1)
     run_date = session_date or date.today().isoformat()
 
     plans: list[SessionPlan] = []
-    for _ in range(spin_count):
+    for _ in range(shot_count):
         plan = _run_single_plan(
             local_history=local_history,
             session_parameters=parameters,
@@ -88,12 +88,12 @@ def _resolve_session_parameters(
     parameters = dict(io.get_session_defaults())
 
     if overrides:
-        for key in ("count", "session_time", "break_time", "spins"):
+        for key in ("count", "session_time", "break_time", "shots"):
             if key in overrides:
                 parameters[key] = int(overrides[key])
 
-    if "spins" not in parameters:
-        parameters["spins"] = 1
+    if "shots" not in parameters:
+        parameters["shots"] = 1
 
     return parameters
 
@@ -113,7 +113,7 @@ def _build_revision_entry(
         session_date: ISO formatted date string to record against the entry.
     Outputs: Dictionary representing the history entry consumed by preprocessing.
     """
-    revision_score = float(1.5 * max(session_time - break_time, 15))
+    revision_score = float(max(session_time - break_time, 15))
     return {
         "subject": subject,
         "type": "Revision",
@@ -146,7 +146,7 @@ def _adjust_local_scores(
     Outputs: None (side-effect updates `local_scores` in place).
     """
     studied_delta = 0.005 * ((2.5 * session_time) - break_time)
-    not_studied_delta = 0.01
+    not_studied_delta = 0.001
 
     for subject in local_scores:
         if subject == chosen_subject:
@@ -170,7 +170,7 @@ def _build_not_studied_entries(
     session_date: str,
 ) -> list[dict[str, str | float]]:
     """Return penalty entries for subjects not selected in the generated plan."""
-    penalty_score = float(-1 * (session_time - break_time))
+    penalty_score = float(-1.6 * (session_time - break_time))
     entries: list[dict[str, str | float]] = []
 
     for subject in sorted(tracked_subjects):
@@ -208,12 +208,14 @@ def _persist_history(new_entries: Sequence[dict[str, str | float]]) -> None:
 
     with history_path.open("w", encoding="utf-8") as handle:
         json.dump(history, handle, indent=4)
+
+
 def _run_single_plan(
     local_history: list[dict[str, str | float]],
     session_parameters: Mapping[str, int],
     session_date: str,
 ) -> SessionPlan:
-    """Execute the scheduling workflow for a single spin."""
+    """Execute the scheduling workflow for a single shot."""
     session_count = max(int(session_parameters["count"]), 0)
     session_time = int(session_parameters["session_time"])
     break_time = int(session_parameters["break_time"])

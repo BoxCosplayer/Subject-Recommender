@@ -61,7 +61,7 @@ def test_get_session_defaults_reflects_config() -> None:
         "count": config.SESSION_COUNT,
         "session_time": config.SESSION_TIME_MINUTES,
         "break_time": config.BREAK_TIME_MINUTES,
-        "spins": config.SPINS,
+        "shots": config.SHOTS,
     }
 
 

@@ -33,7 +33,7 @@ def test_generate_session_plan_returns_schedule_and_entries(
     monkeypatch.setattr(
         generator_module.io,
         "get_session_defaults",
-        lambda: {"count": 2, "session_time": 45, "break_time": 15, "spins": 1},
+        lambda: {"count": 2, "session_time": 45, "break_time": 15, "shots": 1},
     )
     monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {})
     monkeypatch.setattr(
@@ -76,7 +76,7 @@ def test_generate_session_plan_loads_history_and_defaults(
     monkeypatch.setattr(
         generator_module.io,
         "get_session_defaults",
-        lambda: {"count": 1, "session_time": 30, "break_time": 5, "spins": 1},
+        lambda: {"count": 1, "session_time": 30, "break_time": 5, "shots": 1},
     )
     monkeypatch.setattr(
         generator_module.io,
@@ -115,7 +115,7 @@ def test_generate_session_plan_merges_partial_overrides(
     monkeypatch.setattr(
         generator_module.io,
         "get_session_defaults",
-        lambda: {"count": 3, "session_time": 40, "break_time": 10, "spins": 1},
+        lambda: {"count": 3, "session_time": 40, "break_time": 10, "shots": 1},
     )
     monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {"Chemistry": 0.6})
     monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
@@ -132,10 +132,10 @@ def test_generate_session_plan_merges_partial_overrides(
     assert any(entry["type"] == "Not Studied" for entry in plan.new_entries)
 
 
-def test_generate_session_plan_runs_multiple_spins(
+def test_generate_session_plan_runs_multiple_shots(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure the generator produces multiple plans when spins > 1."""
+    """Ensure the generator produces multiple plans when shots > 1."""
 
     history = [
         {"subject": "Maths", "type": "Quiz", "score": 55, "date": "2025-03-01"},
@@ -143,11 +143,11 @@ def test_generate_session_plan_runs_multiple_spins(
     monkeypatch.setattr(
         generator_module.io,
         "get_session_defaults",
-        lambda: {"count": 1, "session_time": 45, "break_time": 15, "spins": 2},
+        lambda: {"count": 1, "session_time": 45, "break_time": 15, "shots": 2},
     )
     monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {})
 
-    spin_scores = iter(
+    shot_scores = iter(
         [
             {"Physics": 0.1, "History": 0.2},
             {"Physics": 0.6, "History": 0.4},
@@ -156,7 +156,7 @@ def test_generate_session_plan_runs_multiple_spins(
     monkeypatch.setattr(
         generator_module,
         "_initialise_local_scores",
-        lambda _: next(spin_scores),
+        lambda _: next(shot_scores),
     )
 
     persist_calls: list[list[dict[str, str | float]]] = []
@@ -235,8 +235,8 @@ def test_adjust_local_scores_scales_with_effective_minutes() -> None:
     assert short_not_studied_drop < long_not_studied_drop
 
 
-def test_resolve_session_parameters_adds_default_spin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure `_resolve_session_parameters` always returns a `spins` key."""
+def test_resolve_session_parameters_adds_default_shot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure `_resolve_session_parameters` always returns a `shots` key."""
 
     monkeypatch.setattr(
         generator_module.io,
@@ -246,7 +246,7 @@ def test_resolve_session_parameters_adds_default_spin(monkeypatch: pytest.Monkey
 
     resolved = generator_module._resolve_session_parameters(None)
 
-    assert resolved["spins"] == 1
+    assert resolved["shots"] == 1
 
 
 def test_persist_history_writes_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
