@@ -8,6 +8,8 @@ results returned by the preprocessing modules.
 
 from __future__ import annotations
 
+from math import floor
+
 import pytest
 
 from subject_recommender import preprocessing
@@ -30,6 +32,11 @@ def test_apply_weighting_applies_configured_weights(
         "get_assessment_weights",
         lambda: {"Exam": 2.0, "Quiz": 1.5},
     )
+    monkeypatch.setattr(
+        weighting.io,
+        "get_predicted_grades",
+        lambda: {"Maths": 0.7, "Physics": 0.6},
+    )
 
     history = [
         {"subject": "Maths", "score": 75, "type": "Exam"},
@@ -40,10 +47,48 @@ def test_apply_weighting_applies_configured_weights(
 
     weighted_history = weighting.apply_weighting(history)
 
-    assert weighted_history["Maths"]["weighted"] == pytest.approx((75 * 2.0) + (65 * 1.5))
-    assert weighted_history["Maths"]["weight"] == pytest.approx(2.0 + 1.5)
-    assert weighted_history["Physics"]["weighted"] == pytest.approx((80 * 2.0) + (50 * 1.0))
-    assert weighted_history["Physics"]["weight"] == pytest.approx(2.0 + 1.0)
+    maths_exam_weight = 2.0 * (100 - 75)
+    maths_quiz_weight = 1.5 * (100 - 65)
+    physics_exam_weight = 2.0 * (100 - 80)
+
+    assert weighted_history["Maths"]["weighted"] == pytest.approx((75 * maths_exam_weight) + (65 * maths_quiz_weight))
+    assert weighted_history["Maths"]["weight"] == pytest.approx(maths_exam_weight + maths_quiz_weight)
+    assert weighted_history["Physics"]["weighted"] == pytest.approx(80 * physics_exam_weight)
+    assert weighted_history["Physics"]["weight"] == pytest.approx(physics_exam_weight)
+
+
+def test_apply_weighting_uses_predictions_for_non_positive_scores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure predicted grades determine weights when scores are non-positive.
+
+    Inputs: `monkeypatch` fixture overriding IO helpers and a history list containing
+    zero and negative scores.
+    Outputs: WeightedHistory entry whose weights equal the floored prediction deltas,
+    ensuring the fallback branch is exercised.
+    """
+
+    monkeypatch.setattr(weighting.io, "get_assessment_weights", lambda: {"Exam": 1.0})
+    monkeypatch.setattr(
+        weighting.io,
+        "get_predicted_grades",
+        lambda: {"History": 0.25},
+    )
+
+    history = [
+        {"subject": "History", "score": 0, "type": "Exam"},
+        {"subject": "History", "score": -10, "type": "Exam"},
+        {"subject": "Art", "score": -5, "type": "Exam"},
+    ]
+
+    weighted_history = weighting.apply_weighting(history)
+
+    expected_history_weight = floor(100 * (1.0 - 0.25))
+    assert weighted_history["History"]["weight"] == pytest.approx(expected_history_weight * 2)
+    assert weighted_history["History"]["weighted"] == pytest.approx(-10 * expected_history_weight)
+    expected_art_weight = floor(100 * (1.0 - 0.1))
+    assert weighted_history["Art"]["weight"] == pytest.approx(expected_art_weight)
+    assert weighted_history["Art"]["weighted"] == pytest.approx(-5 * expected_art_weight)
 
 
 def test_aggregate_scores_combines_defaults_and_results(

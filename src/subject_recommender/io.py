@@ -15,6 +15,18 @@ _ROOT_DIR = Path(__file__).resolve().parents[2]
 _DATA_DIR = _ROOT_DIR / "data"
 
 
+def _resolve_data_path(configured_location: str) -> Path:
+    """Return an absolute dataset path derived from configuration settings.
+
+    Inputs: configured_location (str or path-like string) sourced from `config.py`.
+    Outputs: Path pointing to the resolved dataset on disk.
+    """
+    candidate = Path(configured_location)
+    if candidate.is_absolute():
+        return candidate
+    return _DATA_DIR / candidate
+
+
 def get_assessment_weights() -> dict[str, float]:
     """Return the weighting per assessment type.
 
@@ -58,12 +70,12 @@ def get_session_defaults() -> dict[str, int]:
 
 
 def get_predicted_grades() -> dict[str, float]:
-    """Load the predicted grades dataset from data/predicted_grades.json.
+    """Load the predicted grades dataset from the configured predictions path.
 
-    Inputs: None beyond filesystem access to the bundled JSON file.
+    Inputs: Path resolved from `config.TEST_PREDICTED_GRADES_PATH`.
     Outputs: dict[str, float] mapping subjects to predicted grade scores.
     """
-    predictions_path = _DATA_DIR / "predicted_grades.json"
+    predictions_path = _resolve_data_path(config.TEST_PREDICTED_GRADES_PATH)
     with predictions_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
@@ -81,11 +93,11 @@ def get_predicted_grades() -> dict[str, float]:
 def get_study_history() -> list[dict[str, str | float]]:
     """Return the stored study history entries.
 
-    Inputs: JSON payload stored in `data/history.json`.
+    Inputs: Path resolved from `config.TEST_HISTORY_PATH`.
     Outputs: list[dict[str, str | float]] with the canonical history schema
     (`subject`, `type`, `score`, `date` fields).
     """
-    history_path = _DATA_DIR / "history.json"
+    history_path = _resolve_data_path(config.TEST_HISTORY_PATH)
     with history_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 

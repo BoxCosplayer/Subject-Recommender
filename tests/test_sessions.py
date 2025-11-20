@@ -197,18 +197,30 @@ def test_initialise_local_scores_scales_aggregated_values(
 
 
 def test_adjust_local_scores_updates_subject_weights() -> None:
-    """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics."""
+    """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics.
+
+    Inputs: Inline dictionary representing the local scores map along with explicit
+    integers for the session duration and break length.
+    Outputs: Mutated dictionary confirming the studied subject increases and other
+    subjects receive a fixed penalty of 0.001.
+    """
 
     scores = {"Maths": 0.2, "Chemistry": 0.5}
 
     generator_module._adjust_local_scores(scores, "Maths", session_time=40, break_time=10)
 
     assert scores["Maths"] > 0.2
-    assert scores["Chemistry"] == pytest.approx(0.49)
+    assert scores["Chemistry"] == pytest.approx(0.499)
 
 
 def test_adjust_local_scores_scales_with_effective_minutes() -> None:
-    """Ensure `_adjust_local_scores` reacts to the effective study duration."""
+    """Ensure `_adjust_local_scores` reacts to the effective study duration.
+
+    Inputs: Two local score dictionaries updated via `_adjust_local_scores`
+    with short and long study durations.
+    Outputs: Derived deltas confirming the studied subject reacts to session time
+    while non-studied subjects apply a constant penalty.
+    """
 
     short_scores = {"Maths": 0.3, "Chemistry": 0.4}
     long_scores = {"Maths": 0.3, "Chemistry": 0.4}
@@ -232,7 +244,8 @@ def test_adjust_local_scores_scales_with_effective_minutes() -> None:
     long_not_studied_drop = 0.4 - long_scores["Chemistry"]
 
     assert short_studied_increase < long_studied_increase
-    assert short_not_studied_drop < long_not_studied_drop
+    assert short_not_studied_drop == pytest.approx(long_not_studied_drop)
+    assert short_not_studied_drop == pytest.approx(0.001)
 
 
 def test_resolve_session_parameters_adds_default_shot(monkeypatch: pytest.MonkeyPatch) -> None:

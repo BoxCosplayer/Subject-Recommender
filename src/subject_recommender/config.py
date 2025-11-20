@@ -1,4 +1,8 @@
-"""Central location for tunable parameters and system constants."""
+"""Define tunable parameters and system constants for the subject recommender.
+
+Inputs: None; module-level constants configured inside this file.
+Outputs: Named constants consumed across the package for reproducible behaviour.
+"""
 
 from __future__ import annotations
 
@@ -21,3 +25,7 @@ SESSION_TIME_MINUTES = 45
 BREAK_TIME_MINUTES = 15
 SESSION_COUNT = 6
 SHOTS = 7
+
+# TESTING ONLY Data Path Overrides
+TEST_PREDICTED_GRADES_PATH = "ALevel_test-predicted.json"
+TEST_HISTORY_PATH = "ALevel_test-grades.json"
