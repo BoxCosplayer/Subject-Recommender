@@ -120,9 +120,7 @@ def test_main_handles_multiple_shots(monkeypatch: pytest.MonkeyPatch, capsys: py
     assert "Overall session insights" in captured
 
 
-def test_main_resets_history_when_flagged(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_resets_history_when_flagged(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Ensure the reset flag clears the configured history file at the end of a run.
 
     Inputs: Monkeypatched session plan generator and reset helper, executed with `--reset`.

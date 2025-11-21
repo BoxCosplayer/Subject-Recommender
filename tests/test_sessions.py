@@ -174,9 +174,7 @@ def test_generate_session_plan_runs_multiple_shots(
     assert len(persist_calls) == 2
 
 
-def test_generate_session_plan_leaves_predictions_unchanged(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_generate_session_plan_leaves_predictions_unchanged(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure generating multiple shots never mutates the predicted grades dataset on disk.
 
     Inputs: Temporary prediction and history files alongside monkeypatched session defaults and score initialiser.

@@ -43,15 +43,17 @@ def get_assessment_weights() -> dict[str, float]:
     }
 
 
-def get_performance_weights() -> dict[str, float]:
-    """Return recent/history weighting factors for preprocessing.
+def get_date_weighting() -> dict[str, float | int]:
+    """Return age-based weighting boundaries for historical entries.
 
     Inputs: None.
-    Outputs: dict[str, float] containing `recent_weight` and `history_weight`.
+    Outputs: dict[str, float | int] containing `min_weight`, `max_weight`,
+    and `zero_day_threshold` for determining how entry age influences weight.
     """
     return {
-        "recent_weight": config.RECENT_WEIGHT,
-        "history_weight": config.HISTORY_WEIGHT,
+        "min_weight": float(config.DATE_WEIGHT_MIN),
+        "max_weight": float(config.DATE_WEIGHT_MAX),
+        "zero_day_threshold": int(config.DATE_WEIGHT_ZERO_DAY_THRESHOLD),
     }
 
 

@@ -30,23 +30,22 @@ def calculate_weighted_averages(weighted_history: WeightedHistory) -> dict[str, 
 
 
 def aggregate_scores(weighted_history: WeightedHistory) -> dict[str, float]:
-    """Return floored per-subject scores blending defaults and results.
+    """Return floored per-subject scores derived from weighted history.
 
-    Inputs: WeightedHistory mapping subject identifiers to weighted totals and weights.
-    Outputs: dict[str, float] where each subject is mapped to a floored blended score.
+    Inputs: WeightedHistory mapping subject identifiers to weighted totals and weights,
+    already incorporating date weighting factors.
+    Outputs: dict[str, float] where each subject is mapped to a floored score favouring
+    the weighted result when available, otherwise falling back to predicted grades.
     """
     predicted_grades = io.get_predicted_grades()
-    performance_weights = io.get_performance_weights()
-
-    default_weight = performance_weights["recent_weight"]
-    result_weight = performance_weights["history_weight"]
-
     weighted_averages = calculate_weighted_averages(weighted_history)
     aggregated: dict[str, float] = {}
 
     for subject, predicted_grade in predicted_grades.items():
+        subject_totals = weighted_history.get(subject, {})
+        weight_total = float(subject_totals.get("weight", 0.0)) if isinstance(subject_totals, dict) else 0.0
         result_average = weighted_averages.get(subject, 0.0)
-        combined_score = (predicted_grade * default_weight) + (result_average * result_weight)
+        combined_score = result_average if weight_total > 0 else float(predicted_grade)
 
         aggregated[subject] = floor(combined_score * 100) / 100
 

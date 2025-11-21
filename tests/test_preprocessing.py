@@ -94,22 +94,18 @@ def test_apply_weighting_uses_predictions_for_non_positive_scores(
 def test_aggregate_scores_combines_defaults_and_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure aggregation blends predicted grades with weighted history averages.
+    """Ensure aggregation favours weighted history averages with predicted fallbacks.
 
     Inputs: `monkeypatch` fixture replacing IO calls to provide `Dict[str, float]`
-    predictions and `Dict[str, float]` weighting factors plus a `WeightedHistory`.
-    Outputs: `Dict[str, float]` aggregated scores floored to two decimal places.
+    predictions plus a `WeightedHistory`.
+    Outputs: `Dict[str, float]` aggregated scores floored to two decimal places,
+    using weighted averages when available and predictions otherwise.
     """
 
     monkeypatch.setattr(
         aggregation.io,
         "get_predicted_grades",
         lambda: {"Maths": 8.989, "History": 6.0},
-    )
-    monkeypatch.setattr(
-        aggregation.io,
-        "get_performance_weights",
-        lambda: {"recent_weight": 0.5, "history_weight": 0.5},
     )
 
     weighted_history = {
@@ -118,8 +114,8 @@ def test_aggregate_scores_combines_defaults_and_results(
 
     aggregated = aggregation.aggregate_scores(weighted_history)
 
-    assert aggregated["Maths"] == pytest.approx(8.38)
-    assert aggregated["History"] == pytest.approx(3.0)
+    assert aggregated["Maths"] == pytest.approx(7.77)
+    assert aggregated["History"] == pytest.approx(6.0)
 
 
 def test_normalise_scores_uses_io_predictions_when_missing_input(

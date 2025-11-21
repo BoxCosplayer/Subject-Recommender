@@ -47,18 +47,19 @@ def test_get_assessment_weights_reflects_config() -> None:
     }
 
 
-def test_get_performance_weights_reflects_config() -> None:
-    """Verify performance weight response tracks config overrides.
+def test_get_date_weighting_reflects_config() -> None:
+    """Verify date weighting boundaries mirror configuration values.
 
     Inputs: None beyond imported configuration module.
-    Outputs: Dict containing the two expected weighting factors.
+    Outputs: Dict containing minimum, maximum, and threshold values.
     """
 
-    weights = io.get_performance_weights()
+    weighting = io.get_date_weighting()
 
-    assert weights == {
-        "recent_weight": config.RECENT_WEIGHT,
-        "history_weight": config.HISTORY_WEIGHT,
+    assert weighting == {
+        "min_weight": float(config.DATE_WEIGHT_MIN),
+        "max_weight": float(config.DATE_WEIGHT_MAX),
+        "zero_day_threshold": int(config.DATE_WEIGHT_ZERO_DAY_THRESHOLD),
     }
 
 

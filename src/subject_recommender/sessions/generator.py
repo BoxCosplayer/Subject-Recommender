@@ -9,12 +9,11 @@ entries that should be appended for persistence.
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-
-import math
 from math import sin
 
 from .. import config, io, preprocessing
@@ -118,8 +117,8 @@ def _build_revision_entry(
     """
     predicted_grades = io.get_predicted_grades()
     predicted_grade = float(predicted_grades.get(subject, 0.0))
-    x = math.fabs(predicted_grade - 1) * 2*math.pi
-    revision_score = float( (sin(x/4 + math.pi/2)) * (session_time + break_time))
+    x = math.fabs(predicted_grade - 1) * 2 * math.pi
+    revision_score = float((sin(x / 4 + math.pi / 2)) * (session_time + break_time))
     return {
         "subject": subject,
         "type": "Revision",

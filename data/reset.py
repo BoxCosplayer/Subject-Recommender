@@ -9,12 +9,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from subject_recommender.history_reset import filter_history_file  # type: ignore  # noqa: E402
+from subject_recommender.history_reset import main as _package_main
+
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _SRC_PATH = _PROJECT_ROOT / "src"
 if str(_SRC_PATH) not in sys.path:
     sys.path.insert(0, str(_SRC_PATH))
-
-from subject_recommender.history_reset import filter_history_file, main as _package_main  # type: ignore  # noqa: E402
 
 
 def main(file_name: str | None = None) -> None:

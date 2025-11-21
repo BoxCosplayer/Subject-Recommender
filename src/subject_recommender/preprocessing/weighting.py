@@ -16,12 +16,44 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
+from datetime import date, datetime
 from math import floor
 
 from .. import io
 
 HistoryEntry = Mapping[str, float | str]
 WeightedHistory = dict[str, dict[str, float]]  # {"subject": {"weighted": float, "weight": float}}
+
+
+def _calculate_date_weight(entry_date: str, weighting_config: dict[str, float | int], reference_date: date) -> float:
+    """Return a decay factor based on how old a history entry is.
+
+    Inputs:
+        entry_date (str): ISO formatted date string (YYYY-MM-DD) for the entry.
+        weighting_config (dict[str, float | int]): Mapping containing `min_weight`,
+            `max_weight`, and `zero_day_threshold` bounds sourced from configuration.
+        reference_date (date): The date to measure entry age against.
+    Outputs:
+        float: Date-derived multiplier clamped between configured min and max weights.
+    """
+    try:
+        parsed_date = datetime.strptime(entry_date, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return float(weighting_config["max_weight"])
+
+    age_days = (reference_date - parsed_date).days
+    decay_window = max(1, int(weighting_config["zero_day_threshold"]))
+    min_weight = float(weighting_config["min_weight"])
+    max_weight = float(weighting_config["max_weight"])
+
+    if age_days >= decay_window:
+        return min_weight
+    if age_days <= 0:
+        return max_weight
+
+    span = max_weight - min_weight
+    scaled_weight = max_weight - (span * (age_days / decay_window))
+    return max(min_weight, min(max_weight, scaled_weight))
 
 
 def apply_weighting(history: Iterable[HistoryEntry]) -> WeightedHistory:
@@ -32,11 +64,14 @@ def apply_weighting(history: Iterable[HistoryEntry]) -> WeightedHistory:
             of mappings representing historical assessment entries.
     Outputs:
         WeightedHistory: Dict keyed by subject with running weighted
-            score totals and accumulated weights for each subject.
+            score totals and accumulated weights for each subject. Applies
+            both assessment and date-based weighting to reflect recency.
     """
     assessment_weights = io.get_assessment_weights()
+    date_weighting = io.get_date_weighting()
     predicted_grades = io.get_predicted_grades()
     totals: defaultdict[str, dict[str, float]] = defaultdict(lambda: {"weighted": 0.0, "weight": 0.0})
+    today = date.today()
 
     for entry in history:
         subject = str(entry.get("subject"))
@@ -60,6 +95,9 @@ def apply_weighting(history: Iterable[HistoryEntry]) -> WeightedHistory:
             #     print("CHEM - " + str(prediction_delta))
             #     print("CHEM - " + str((100 * prediction_delta)))
             #     print("CHEM - " + str(weight))
+
+        date_weight = _calculate_date_weight(str(entry.get("date", "")), date_weighting, today)
+        weight *= date_weight
 
         totals[subject]["weighted"] += score * weight
         totals[subject]["weight"] += weight
