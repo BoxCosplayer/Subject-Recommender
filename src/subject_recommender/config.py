@@ -23,9 +23,11 @@ DATE_WEIGHT_MAX = 1
 # TUNABLE Session Parameters
 SESSION_TIME_MINUTES = 45
 BREAK_TIME_MINUTES = 15
+# should be set to ~75% of the no. subjects / topics
 SESSION_COUNT = 8
-SHOTS = 70
+# should be === session_count ?
+SHOTS = 8
 
 # TESTING ONLY Data Path Overrides
-TEST_PREDICTED_GRADES_PATH = "alevel_test-predicted.json"
-TEST_HISTORY_PATH = "alevel_test-grades.json"
+TEST_PREDICTED_GRADES_PATH = "gcse_test-predicted.json"
+TEST_HISTORY_PATH = "gcse_test-grades.json"
