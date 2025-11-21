@@ -146,6 +146,25 @@ def test_get_predicted_grades_supports_absolute_paths(monkeypatch: pytest.Monkey
     assert io.get_predicted_grades() == {"History": 0.95}
 
 
+def test_write_predicted_grades_persists_payload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Ensure predicted grades are written to disk at the configured path.
+
+    Inputs: `monkeypatch` fixture overriding data directories and a predictions mapping.
+    Outputs: JSON content on disk matching the supplied predictions.
+    """
+
+    data_dir = _configure_data_dir(monkeypatch, tmp_path)
+    predictions_path = data_dir / "predicted_grades.json"
+    monkeypatch.setattr(config, "TEST_PREDICTED_GRADES_PATH", predictions_path.name)
+
+    io.write_predicted_grades({"History": 0.75, "Maths": 0.5})
+
+    payload = json.loads(predictions_path.read_text(encoding="utf-8"))
+
+    assert payload["History"] == pytest.approx(0.75)
+    assert payload["Maths"] == pytest.approx(0.5)
+
+
 def test_get_study_history_reads_json_payload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure study history loading parses dictionaries and coalesces types.
 
@@ -154,7 +173,8 @@ def test_get_study_history_reads_json_payload(monkeypatch: pytest.MonkeyPatch, t
     """
 
     data_dir = _configure_data_dir(monkeypatch, tmp_path)
-    history_path = data_dir / "history.json"
+    history_filename = config.TEST_HISTORY_PATH
+    history_path = data_dir / history_filename
     payload = [
         {"subject": "Maths", "type": "Quiz", "score": 65, "date": "2025-03-01"},
         {"subject": "French", "type": "Exam", "score": 72.5, "date": "2025-03-02"},
@@ -178,7 +198,8 @@ def test_get_study_history_rejects_non_list_payload(monkeypatch: pytest.MonkeyPa
     """
 
     data_dir = _configure_data_dir(monkeypatch, tmp_path)
-    history_path = data_dir / "history.json"
+    history_filename = config.TEST_HISTORY_PATH
+    history_path = data_dir / history_filename
     history_path.write_text('{"subject": "Maths"}', encoding="utf-8")
 
     monkeypatch.setattr(config, "TEST_HISTORY_PATH", history_path.name)
@@ -195,7 +216,8 @@ def test_get_study_history_rejects_non_dict_entries(monkeypatch: pytest.MonkeyPa
     """
 
     data_dir = _configure_data_dir(monkeypatch, tmp_path)
-    history_path = data_dir / "history.json"
+    history_filename = config.TEST_HISTORY_PATH
+    history_path = data_dir / history_filename
     history_path.write_text('["Maths"]', encoding="utf-8")
 
     monkeypatch.setattr(config, "TEST_HISTORY_PATH", history_path.name)

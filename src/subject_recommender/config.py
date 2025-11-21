@@ -14,18 +14,18 @@ TOPIC_TEST_WEIGHT = 0.4
 MOCK_EXAM_WEIGHT = 0.5
 EXAM_WEIGHT = 0.6
 
-# FIXED System weighting factors
+# System weighting factors
 # update to factor date as a function
-RECENT_WEIGHT = 0.7
-HISTORY_WEIGHT = 0.3
+RECENT_WEIGHT = 1
+HISTORY_WEIGHT = 1
 
 
 # TUNABLE Session Parameters
 SESSION_TIME_MINUTES = 45
 BREAK_TIME_MINUTES = 15
 SESSION_COUNT = 6
-SHOTS = 7
+SHOTS = 14
 
 # TESTING ONLY Data Path Overrides
-TEST_PREDICTED_GRADES_PATH = "ALevel_test-predicted.json"
-TEST_HISTORY_PATH = "ALevel_test-grades.json"
+TEST_PREDICTED_GRADES_PATH = "gcse_test-predicted.json"
+TEST_HISTORY_PATH = "gcse_test-grades.json"

@@ -14,9 +14,9 @@
 
 - Mirror the package structure in `tests/` (`test_preprocessing.py`, `test_sessions.py`, etc.) so every public function has unit coverage. Keep exploratory scripts confined to `tests/AlgoTesting.py`.
 
-- Keep placeholder directories tracked (`data/.gitkeep`) until real datasets replace them, ensuring the expected structure exists on fresh clones.
+- Keep exploratory scripts guarded with `if __name__ == "__main__":` and direct any generated artefacts to `output/`, creating the directory if needed so pytest collection stays read-only.
 
-- At the start of each file and funciton there should be a docstring detailing function/file purpose, inputs & input types and outputs & output types
+- At the start of each file and function there should be a docstring detailing function/file purpose, inputs & input types and outputs & output types
 
 ## Extra Notes
 

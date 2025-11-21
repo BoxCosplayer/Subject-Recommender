@@ -1,31 +1,36 @@
-"""Utility script to remove synthetic entries from `history.json`.
+"""Wrapper script to reset study-history files without relying on package imports.
 
-Inputs: JSON file stored alongside this script under `data/history.json`.
-Outputs: Updated JSON file excluding entries whose `type` is `Revision` or `Not Studied`.
+Inputs: Optional filename (str) under `data/` when executed directly; defaults to the configured dataset.
+Outputs: Filtered history JSON persisted back to disk and a printed status message.
 """
 
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
 
-_DATA_DIR = Path(__file__).resolve().parent
-_HISTORY_PATH = _DATA_DIR / "gcse_test-predicted.json"
-# "gcse_test-grades.json"
-# "uni_test-grades.json"
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_SRC_PATH = _PROJECT_ROOT / "src"
+if str(_SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(_SRC_PATH))
+
+from subject_recommender.history_reset import filter_history_file, main as _package_main  # type: ignore  # noqa: E402
 
 
-def main() -> None:
-    """Load, filter, and rewrite the study history dataset."""
-    with _HISTORY_PATH.open("r", encoding="utf-8-sig") as handle:
-        data = json.load(handle)
+def main(file_name: str | None = None) -> None:
+    """Delegate to the packaged history reset helper for standalone execution.
 
-    filtered_data = [entry for entry in data if entry.get("type") not in {"Revision", "Not Studied"}]
-
-    with _HISTORY_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(filtered_data, handle, indent=4)
-
-    print("Entries with type 'Revision' or 'Not Studied' have been removed.")
+    Inputs: file_name (str | None): optional dataset name; if omitted, the configured default is used.
+    Outputs: None: writes filtered history to disk and prints a short status message.
+    """
+    if file_name is None:
+        _package_main()
+        return
+    filtered_data = filter_history_file(file_name)
+    print(
+        f"Entries with type 'Revision' or 'Not Studied' have been removed from {file_name}. "
+        f"{len(filtered_data)} records remain."
+    )
 
 
 if __name__ == "__main__":

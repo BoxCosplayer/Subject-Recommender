@@ -1,15 +1,18 @@
 """Provide a minimal command-line interface for generating a study plan.
 
-Inputs: None supplied via CLI flags; the module reads persisted history/config.
+Inputs: Optional CLI flags such as `-r/--reset` to clean configured history datasets.
 Outputs: Printed list of subjects representing the generated session sequence and analysis.
 """
 
 from __future__ import annotations
 
+import argparse
 from collections import Counter
+from collections.abc import Sequence
 from typing import Any
 
-from . import config
+from . import config, preprocessing
+from .history_reset import filter_history_file
 from .sessions import generate_session_plan
 from .sessions.generator import SessionPlan
 
@@ -33,8 +36,34 @@ def _format_plan(plan: SessionPlan, shot_number: int | None = None) -> str:
     return "\n".join(lines)
 
 
+def _calculate_score_similarity(normalised_scores: dict[str, float]) -> dict[str, float]:
+    """Return per-subject similarity relative to the highest normalised score.
+
+    Inputs: normalised_scores (dict[str, float]): mapping of subjects to normalised scores that
+    should sum to one.
+    Outputs: dict[str, float]: mapping of subjects to similarity ratios between zero (lowest score)
+    and one (highest score) scaled across the observed score range.
+    """
+    if not normalised_scores:
+        return {}
+
+    max_score = max(normalised_scores.values())
+    min_score = min(normalised_scores.values())
+
+    if max_score == min_score:
+        return {subject: 1.0 for subject in normalised_scores}
+
+    spread = max_score - min_score
+    return {subject: (score - min_score) / spread for subject, score in normalised_scores.items()}
+
+
 def analyse_run(plans: list[SessionPlan]) -> dict[str, Any]:
-    """Return descriptive statistics for the full multi-shot run."""
+    """Return descriptive statistics for the full multi-shot run.
+
+    Inputs: plans (list[SessionPlan]): ordered study plans produced by the generator.
+    Outputs: dict[str, Any]: aggregate metrics including frequency, streaks, recommendations,
+    normalised scores, and similarity ratios describing how close subjects are to the highest score.
+    """
     subjects = [subject for plan in plans for subject in plan.subjects]
     frequency = Counter(subjects)
     unique_subjects = len(frequency)
@@ -68,6 +97,10 @@ def analyse_run(plans: list[SessionPlan]) -> dict[str, Any]:
     else:
         recommended_cap = len(subjects)
 
+    final_history = plans[-1].history if plans else []
+    normalised_scores = preprocessing.calculate_normalised_scores(final_history)
+    normalised_similarity = _calculate_score_similarity(normalised_scores)
+
     return {
         "frequency": dict(frequency),
         "unique_subjects": unique_subjects,
@@ -77,11 +110,17 @@ def analyse_run(plans: list[SessionPlan]) -> dict[str, Any]:
         "recommended_session_cap": max(recommended_cap, 0),
         "total_sessions": len(subjects),
         "shots": len(plans),
+        "normalised_scores": normalised_scores,
+        "normalised_similarity": normalised_similarity,
     }
 
 
 def _format_analysis(plans: list[SessionPlan]) -> str:
-    """Return a human-readable string describing run-level statistics."""
+    """Return a human-readable string describing run-level statistics.
+
+    Inputs: plans (list[SessionPlan]): ordered study plans to analyse.
+    Outputs: str: formatted, multi-line analysis suitable for console output.
+    """
     analysis = analyse_run(plans)
     if not analysis["total_sessions"]:
         return "\nNo sessions to analyse."
@@ -99,8 +138,27 @@ def _format_analysis(plans: list[SessionPlan]) -> str:
         f"- Total sessions scheduled: {analysis['total_sessions']}",
         f"- Unique subjects scheduled: {analysis['unique_subjects']}",
         f"- Subject frequency: {frequency_text}",
-        f"- Longest streak: {analysis['longest_streak_subject'] or 'N/A'} (×{analysis['longest_streak']})",
     ]
+
+    normalised_scores = analysis.get("normalised_scores", {})
+    normalised_similarity = analysis.get("normalised_similarity", {})
+
+    if normalised_scores:
+        similarity_items = sorted(
+            normalised_scores.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+        similarity_text = ", ".join(
+            f"{subject}: {score:.3f} (similarity {normalised_similarity.get(subject, 0.0):.2f})"
+            for subject, score in similarity_items
+        )
+        lines.append(f"- Normalised score similarity (relative to highest): {similarity_text}")
+    else:
+        lines.append("- Normalised score similarity: unavailable (no scores to compare).")
+
+    lines.append(
+        f"- Longest streak: {analysis['longest_streak_subject'] or 'N/A'} ({analysis['longest_streak']} sessions)",
+    )
 
     if analysis["first_repeat_position"]:
         lines.append(
@@ -117,14 +175,44 @@ def _format_analysis(plans: list[SessionPlan]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse recognised CLI arguments for the subject recommender command.
+
+    Inputs: argv (Sequence[str] | None): optional argument list excluding the program name.
+    Outputs: argparse.Namespace containing parsed flags such as `reset`.
+    """
+    parser = argparse.ArgumentParser(description="Generate a study plan and supporting insights.")
+    parser.add_argument(
+        "-r",
+        "--reset",
+        action="store_true",
+        help="Reset the configured history dataset after generating the plan.",
+    )
+    return parser.parse_args(argv)
+
+
+def _reset_history() -> list[dict[str, object]]:
+    """Invoke the data reset helper using the configured history filename.
+
+    Inputs: None (uses `config.TEST_HISTORY_PATH` to locate the dataset).
+    Outputs: list[dict[str, object]] representing the filtered history after reset.
+    """
+    filtered_history = filter_history_file(config.TEST_HISTORY_PATH)
+    print(f"History reset applied to {config.TEST_HISTORY_PATH}.")
+    return filtered_history
+
+
+def main(argv: Sequence[str] | None = None) -> None:
     """Entry point for the CLI executable.
 
-    Inputs: None (relies on configuration defaults and stored history).
+    Inputs: argv (Sequence[str] | None): optional arguments forwarded from the shell.
     Outputs: Printed study plan text and analysis streamed to standard output.
     """
+    args = _parse_args(argv)
     plans = generate_session_plan()
     for index, plan in enumerate(plans, start=1):
         print(_format_plan(plan, shot_number=index if len(plans) > 1 else None))
 
     print(_format_analysis(plans))
+    if args.reset:
+        _reset_history()

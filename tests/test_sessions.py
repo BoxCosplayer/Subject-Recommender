@@ -42,6 +42,7 @@ def test_generate_session_plan_returns_schedule_and_entries(
         lambda _: {"Physics": 0.1, "History": 0.2},
     )
     monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module.io, "write_predicted_grades", lambda _: None)
 
     plans = generate_session_plan(
         history=history,
@@ -89,6 +90,7 @@ def test_generate_session_plan_loads_history_and_defaults(
         lambda _: {"English Literature": 0.05, "Maths": 0.2},
     )
     monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module.io, "write_predicted_grades", lambda _: None)
 
     plans = generate_session_plan(session_date="2025-04-01")
 
@@ -119,6 +121,7 @@ def test_generate_session_plan_merges_partial_overrides(
     )
     monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {"Chemistry": 0.6})
     monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module.io, "write_predicted_grades", lambda _: None)
 
     plans = generate_session_plan(
         history=history,
@@ -165,6 +168,7 @@ def test_generate_session_plan_runs_multiple_shots(
         "_persist_history",
         lambda entries: persist_calls.append(list(entries)),
     )
+    monkeypatch.setattr(generator_module.io, "write_predicted_grades", lambda _: None)
 
     plans = generate_session_plan(history=history, session_date="2025-03-10")
 
@@ -172,6 +176,69 @@ def test_generate_session_plan_runs_multiple_shots(
     assert plans[0].subjects == ["Physics"]
     assert plans[1].subjects == ["History"]
     assert len(persist_calls) == 2
+
+
+def test_generate_session_plan_regenerates_predictions_between_shots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure predicted grades regenerate after the first shot for subsequent runs.
+
+    Inputs: `monkeypatch` fixture overriding weighting outputs, persistence hooks, and session defaults.
+    Outputs: Recorded predictions demonstrating regeneration uses updated history snapshots.
+    """
+
+    history = [{"subject": "Maths", "type": "Quiz", "score": 55, "date": "2025-03-01"}]
+    monkeypatch.setattr(
+        generator_module.io,
+        "get_session_defaults",
+        lambda: {"count": 1, "session_time": 30, "break_time": 5, "shots": 2},
+    )
+    monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {})
+    monkeypatch.setattr(
+        generator_module.io,
+        "get_assessment_weights",
+        lambda: {"Quiz": 1.0, "Revision": 1.0},
+    )
+
+    recorded_histories: list[list[dict[str, str | float]]] = []
+    original_calculate_predictions = generator_module._calculate_predicted_grades_from_history
+
+    def capture_predictions(history_snapshot: list[dict[str, str | float]]) -> dict[str, float]:
+        recorded_histories.append([dict(entry) for entry in history_snapshot])
+        return original_calculate_predictions(history_snapshot)
+
+    monkeypatch.setattr(generator_module, "_calculate_predicted_grades_from_history", capture_predictions)
+    written_predictions: list[dict[str, float]] = []
+    monkeypatch.setattr(
+        generator_module.io,
+        "write_predicted_grades",
+        lambda payload: written_predictions.append(dict(payload)),
+    )
+
+    def fake_run_single_plan(
+        local_history: list[dict[str, str | float]],
+        session_parameters: dict[str, int],
+        session_date: str,
+    ) -> generator_module.SessionPlan:
+        entry = {"subject": "Maths", "type": "Revision", "score": 60.0, "date": session_date}
+        local_history.append(entry)
+        return generator_module.SessionPlan(
+            subjects=["Maths"],
+            new_entries=[entry],
+            history=[dict(item) for item in local_history],
+        )
+
+    monkeypatch.setattr(generator_module, "_run_single_plan", fake_run_single_plan)
+    monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+
+    plans = generate_session_plan(history=history, session_date="2025-08-01")
+
+    assert len(plans) == 2
+    assert len(written_predictions) == 2
+    assert len(recorded_histories) == 2
+    assert recorded_histories[0][-1]["type"] == "Revision"
+    assert written_predictions[0]["Maths"] == pytest.approx(0.575)
+    assert written_predictions[1]["Maths"] == pytest.approx(0.5833333, rel=1e-3)
 
 
 def test_initialise_local_scores_scales_aggregated_values(
@@ -196,13 +263,41 @@ def test_initialise_local_scores_scales_aggregated_values(
     assert generator_module._initialise_local_scores(history) == {"Maths": 0.25}
 
 
+def test_calculate_predicted_grades_from_history_scales_weighted_averages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure regenerated predictions divide weighted averages by 100 and clamp negatives.
+
+    Inputs: minimal history list with positive and negative scores plus custom assessment weights.
+    Outputs: Dict mapping subjects to scaled predicted grades, clamping values below zero while
+    applying weighting factors.
+    """
+
+    history = [
+        {"subject": "Maths", "type": "Quiz", "score": 50, "date": "2025-03-01"},
+        {"subject": "Maths", "type": "Homework", "score": 70, "date": "2025-03-02"},
+        {"subject": "French", "type": "Homework", "score": -10, "date": "2025-03-03"},
+    ]
+
+    monkeypatch.setattr(
+        generator_module.io,
+        "get_assessment_weights",
+        lambda: {"Quiz": 2.0, "Homework": 1.0},
+    )
+
+    predictions = generator_module._calculate_predicted_grades_from_history(history)
+
+    assert predictions["Maths"] == pytest.approx(0.5666666, rel=1e-3)
+    assert predictions["French"] == pytest.approx(0.0)
+
+
 def test_adjust_local_scores_updates_subject_weights() -> None:
     """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics.
 
     Inputs: Inline dictionary representing the local scores map along with explicit
     integers for the session duration and break length.
     Outputs: Mutated dictionary confirming the studied subject increases and other
-    subjects receive a fixed penalty of 0.001.
+    subjects receive a fixed penalty of 0.005.
     """
 
     scores = {"Maths": 0.2, "Chemistry": 0.5}
@@ -210,7 +305,7 @@ def test_adjust_local_scores_updates_subject_weights() -> None:
     generator_module._adjust_local_scores(scores, "Maths", session_time=40, break_time=10)
 
     assert scores["Maths"] > 0.2
-    assert scores["Chemistry"] == pytest.approx(0.499)
+    assert scores["Chemistry"] == pytest.approx(0.495)
 
 
 def test_adjust_local_scores_scales_with_effective_minutes() -> None:
@@ -245,7 +340,7 @@ def test_adjust_local_scores_scales_with_effective_minutes() -> None:
 
     assert short_studied_increase < long_studied_increase
     assert short_not_studied_drop == pytest.approx(long_not_studied_drop)
-    assert short_not_studied_drop == pytest.approx(0.001)
+    assert short_not_studied_drop == pytest.approx(0.005)
 
 
 def test_resolve_session_parameters_adds_default_shot(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -267,6 +362,7 @@ def test_persist_history_writes_entries(tmp_path: Path, monkeypatch: pytest.Monk
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
+    monkeypatch.setattr(generator_module.config, "TEST_HISTORY_PATH", "predicted_grades.json")
     monkeypatch.setattr(generator_module.io, "_DATA_DIR", data_dir)
 
     entries = [
@@ -275,8 +371,8 @@ def test_persist_history_writes_entries(tmp_path: Path, monkeypatch: pytest.Monk
 
     generator_module._persist_history(entries)
 
-    history_path = data_dir / "history.json"
-    payload = json.loads(history_path.read_text())
+    history_path = data_dir / generator_module.config.TEST_HISTORY_PATH
+    payload = json.loads(history_path.read_text(encoding="utf-8"))
 
     assert payload[-1]["subject"] == "Maths"
 
@@ -286,7 +382,8 @@ def test_persist_history_appends_to_existing_file(tmp_path: Path, monkeypatch: p
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
-    history_path = data_dir / "history.json"
+    monkeypatch.setattr(generator_module.config, "TEST_PREDICTED_GRADES_PATH", "predicted_grades.json")
+    history_path = data_dir / generator_module.config.TEST_HISTORY_PATH
     history_path.write_text(
         json.dumps([{"subject": "History", "type": "Revision", "score": 60, "date": "2025-03-09"}]),
         encoding="utf-8",
@@ -299,7 +396,7 @@ def test_persist_history_appends_to_existing_file(tmp_path: Path, monkeypatch: p
 
     generator_module._persist_history(entries)
 
-    payload = json.loads(history_path.read_text())
+    payload = json.loads(history_path.read_text(encoding="utf-8"))
 
     assert len(payload) == 2
     assert payload[-1]["subject"] == "Chemistry"
@@ -310,8 +407,9 @@ def test_persist_history_ignores_empty_payload(tmp_path: Path, monkeypatch: pyte
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
+    monkeypatch.setattr(generator_module.config, "TEST_PREDICTED_GRADES_PATH", "predicted_grades.json")
     monkeypatch.setattr(generator_module.io, "_DATA_DIR", data_dir)
 
     generator_module._persist_history([])
 
-    assert not (data_dir / "history.json").exists()
+    assert not (data_dir / generator_module.config.TEST_HISTORY_PATH).exists()

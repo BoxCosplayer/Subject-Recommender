@@ -52,6 +52,8 @@ def test_analyse_run_reports_frequency_and_patterns() -> None:
     assert analysis["first_repeat_position"] == 2
     assert analysis["recommended_session_cap"] == 1
     assert analysis["shots"] == 1
+    assert "normalised_scores" in analysis
+    assert "normalised_similarity" in analysis
 
 
 def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,6 +61,11 @@ def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch
 
     plans = [SessionPlan(subjects=["Physics", "Chemistry", "Physics"], new_entries=[], history=[])]
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 13)
+    monkeypatch.setattr(
+        cli.preprocessing,
+        "calculate_normalised_scores",
+        lambda _: {"Physics": 0.6, "Chemistry": 0.4},
+    )
 
     summary = cli._format_analysis(plans)
 
@@ -67,6 +74,7 @@ def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch
     assert "Subject frequency" in summary
     assert "First repeat detected at session 3" in summary
     assert "Suggested SESSION_COUNT cap" in summary
+    assert "Normalised score similarity" in summary
 
 
 def test_format_analysis_handles_empty_run() -> None:
@@ -83,8 +91,9 @@ def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: 
     plan = SessionPlan(subjects=["Physics", "Chemistry"], new_entries=[], history=[])
     monkeypatch.setattr(cli, "generate_session_plan", lambda: [plan])
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 5)
+    monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Physics": 0.7})
 
-    cli.main()
+    cli.main([])
 
     captured = capsys.readouterr().out.strip()
     assert "Study session plan" in captured
@@ -101,10 +110,51 @@ def test_main_handles_multiple_shots(monkeypatch: pytest.MonkeyPatch, capsys: py
     ]
     monkeypatch.setattr(cli, "generate_session_plan", lambda: plans)
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 5)
+    monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Chemistry": 0.5})
 
-    cli.main()
+    cli.main([])
 
     captured = capsys.readouterr().out.strip()
     assert "shot 1" in captured
     assert "shot 2" in captured
     assert "Overall session insights" in captured
+
+
+def test_main_resets_history_when_flagged(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ensure the reset flag clears the configured history file at the end of a run.
+
+    Inputs: Monkeypatched session plan generator and reset helper, executed with `--reset`.
+    Outputs: Assertions confirming the filtered filename and the printed status message.
+    """
+
+    plan = SessionPlan(subjects=["Physics"], new_entries=[], history=[])
+    monkeypatch.setattr(cli, "generate_session_plan", lambda: [plan])
+    monkeypatch.setattr(cli.config, "SESSION_COUNT", 3)
+
+    calls: dict[str, str | None] = {"file": None}
+
+    def fake_reset(file_name: str) -> list[dict[str, object]]:
+        calls["file"] = file_name
+        return []
+
+    monkeypatch.setattr(cli, "filter_history_file", fake_reset)
+
+    cli.main(["--reset"])
+
+    captured = capsys.readouterr().out.strip()
+    assert calls["file"] == cli.config.TEST_HISTORY_PATH
+    assert "History reset applied" in captured
+
+
+def test_calculate_score_similarity_scales_range() -> None:
+    """Ensure score similarity scales between the lowest and highest normalised scores."""
+
+    normalised_scores = {"Maths": 0.6, "History": 0.4, "Physics": 0.5}
+
+    similarity = cli._calculate_score_similarity(normalised_scores)
+
+    assert similarity["Maths"] == pytest.approx(1.0)
+    assert similarity["History"] == pytest.approx(0.0)
+    assert similarity["Physics"] == pytest.approx(0.5)
