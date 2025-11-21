@@ -11,22 +11,35 @@ on:
   pull_request:
 
 jobs:
-  quality:
+  ruff:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/ruff-action@v1
+        with:
+          args: check .
+
+      - uses: astral-sh/ruff-action@v1
+        with:
+          args: format --check .
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ".[dev]"
-      - name: Run Ruff
-        run: ruff check .
-      - name: Run pytest with coverage
-        run: coverage run -m pytest
-      - name: Enforce 100 percent coverage
-        run: coverage report --fail-under=100
+          pip install -r requirements.txt
+          pip install pytest coverage
+
+      - name: Run pytest with coverage (require 100%)
+        run: |
+          coverage run -m pytest --no-summary
+          coverage report --fail-under=100

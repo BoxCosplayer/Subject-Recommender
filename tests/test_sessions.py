@@ -262,6 +262,34 @@ def test_calculate_predicted_grades_from_history_scales_weighted_averages(
     assert predictions["French"] == pytest.approx(0.0)
 
 
+def test_calculate_predicted_grades_skips_empty_subjects_and_zero_weights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure `_calculate_predicted_grades_from_history` handles empty subjects and non-positive weights.
+
+    Inputs: History list containing an empty subject entry and a zero-weight assessment type,
+    alongside monkeypatched assessment weights that force the weight <= 0 branch.
+    Outputs: Predictions excluding the empty subject while returning a zero grade for the zero-weight entry.
+    """
+
+    history = [
+        {"subject": "", "type": "Quiz", "score": 50},
+        {"subject": "Geography", "type": "Zero Weight", "score": 60},
+    ]
+
+    monkeypatch.setattr(
+        generator_module.io,
+        "get_assessment_weights",
+        lambda: {"Zero Weight": 0.0, "Quiz": 1.0},
+    )
+
+    predictions = generator_module._calculate_predicted_grades_from_history(history)
+
+    assert "Geography" in predictions
+    assert predictions["Geography"] == pytest.approx(0.0)
+    assert "" not in predictions
+
+
 def test_adjust_local_scores_updates_subject_weights() -> None:
     """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics.
 

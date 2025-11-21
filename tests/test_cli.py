@@ -85,6 +85,21 @@ def test_format_analysis_handles_empty_run() -> None:
     assert "No sessions to analyse" in cli._format_analysis(plans)
 
 
+def test_format_analysis_handles_missing_normalised_scores(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure `_format_analysis` reports unavailable similarity metrics when no scores exist.
+
+    Inputs: SessionPlan containing at least one subject and a monkeypatched normalised score response of `{}`.
+    Outputs: Summary string mentioning that normalised score similarity data is unavailable.
+    """
+
+    plans = [SessionPlan(subjects=["Physics"], new_entries=[], history=[])]
+    monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {})
+
+    summary = cli._format_analysis(plans)
+
+    assert "Normalised score similarity: unavailable" in summary
+
+
 def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Confirm the CLI entry point prints both the plan and the insights."""
 
@@ -156,3 +171,25 @@ def test_calculate_score_similarity_scales_range() -> None:
     assert similarity["Maths"] == pytest.approx(1.0)
     assert similarity["History"] == pytest.approx(0.0)
     assert similarity["Physics"] == pytest.approx(0.5)
+
+
+def test_calculate_score_similarity_handles_empty_mapping() -> None:
+    """Validate `_calculate_score_similarity` returns an empty mapping for empty input.
+
+    Inputs: Empty dictionary representing the absence of normalised scores.
+    Outputs: Empty dictionary to indicate there are no subjects to compare.
+    """
+
+    assert cli._calculate_score_similarity({}) == {}
+
+
+def test_calculate_score_similarity_scales_equal_scores() -> None:
+    """Confirm `_calculate_score_similarity` returns 1.0 for uniform scores.
+
+    Inputs: Normalised score dictionary where all subjects share the same value.
+    Outputs: Mapping whose similarity entries are all 1.0, reflecting no variance.
+    """
+
+    similarity = cli._calculate_score_similarity({"Maths": 0.3, "Geography": 0.3})
+
+    assert similarity == {"Maths": 1.0, "Geography": 1.0}

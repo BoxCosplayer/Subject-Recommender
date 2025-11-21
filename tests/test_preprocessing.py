@@ -8,6 +8,7 @@ results returned by the preprocessing modules.
 
 from __future__ import annotations
 
+from datetime import date
 from math import floor
 
 import pytest
@@ -89,6 +90,28 @@ def test_apply_weighting_uses_predictions_for_non_positive_scores(
     expected_art_weight = floor(100 * (1.0 - 0.1))
     assert weighted_history["Art"]["weight"] == pytest.approx(expected_art_weight)
     assert weighted_history["Art"]["weighted"] == pytest.approx(-5 * expected_art_weight)
+
+
+def test_calculate_date_weight_covers_age_branches() -> None:
+    """Ensure `_calculate_date_weight` clamps weights across date scenarios.
+
+    Inputs: Weighting configuration dictionary and multiple date strings covering future, recent,
+    threshold-exceeding, and invalid cases.
+    Outputs: Floats reflecting maximum, scaled, minimum, and default weights respectively.
+    """
+
+    reference = date(2025, 6, 10)
+    weighting_config = {"min_weight": 0.2, "max_weight": 1.0, "zero_day_threshold": 10}
+
+    future_weight = weighting._calculate_date_weight("2025-06-15", weighting_config, reference)
+    recent_weight = weighting._calculate_date_weight("2025-06-05", weighting_config, reference)
+    old_weight = weighting._calculate_date_weight("2025-05-01", weighting_config, reference)
+    invalid_weight = weighting._calculate_date_weight("not-a-date", weighting_config, reference)
+
+    assert future_weight == pytest.approx(weighting_config["max_weight"])
+    assert recent_weight < weighting_config["max_weight"]
+    assert old_weight == pytest.approx(weighting_config["min_weight"])
+    assert invalid_weight == pytest.approx(weighting_config["max_weight"])
 
 
 def test_aggregate_scores_combines_defaults_and_results(

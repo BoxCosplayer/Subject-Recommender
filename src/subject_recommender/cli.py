@@ -140,21 +140,21 @@ def _format_analysis(plans: list[SessionPlan]) -> str:
         f"- Subject frequency: {frequency_text}",
     ]
 
-    # normalised_scores = analysis.get("normalised_scores", {})
-    # normalised_similarity = analysis.get("normalised_similarity", {})
+    normalised_scores = analysis.get("normalised_scores", {})
+    normalised_similarity = analysis.get("normalised_similarity", {})
 
-    # if normalised_scores:
-    #     similarity_items = sorted(
-    #         normalised_scores.items(),
-    #         key=lambda item: (-item[1], item[0]),
-    #     )
-    #     similarity_text = ", ".join(
-    #         f"{subject}: {score:.3f} (similarity {normalised_similarity.get(subject, 0.0):.2f})"
-    #         for subject, score in similarity_items
-    #     )
-    #     lines.append(f"- Normalised score similarity (relative to highest): {similarity_text}")
-    # else:
-    #     lines.append("- Normalised score similarity: unavailable (no scores to compare).")
+    if normalised_scores:
+        similarity_items = sorted(
+            normalised_scores.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+        similarity_text = ", ".join(
+            f"{subject}: {score:.3f} (similarity {normalised_similarity.get(subject, 0.0):.2f})"
+            for subject, score in similarity_items
+        )
+        lines.append(f"- Normalised score similarity (relative to highest): {similarity_text}")
+    else:
+        lines.append("- Normalised score similarity: unavailable (no scores to compare).")
 
     lines.append(
         f"- Longest streak: {analysis['longest_streak_subject'] or 'N/A'} ({analysis['longest_streak']} sessions)",
