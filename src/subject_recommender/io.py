@@ -7,7 +7,6 @@ Outputs: Dictionaries that modules such as preprocessing and sessions can consum
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from pathlib import Path
 
 from . import config
@@ -89,21 +88,6 @@ def get_predicted_grades() -> dict[str, float]:
         raise TypeError("predicted_grades dataset must be a dict or a list of dicts")
 
     return {str(subject): float(score) for subject, score in payload.items()}
-
-
-def write_predicted_grades(predicted_grades: Mapping[str, float]) -> None:
-    """Persist predicted grades to the configured predictions dataset path.
-
-    Inputs: predicted_grades (Mapping[str, float]): mapping of subject names to probability-like scores.
-    Outputs: None (writes JSON payload to disk, ensuring parent directories exist).
-    """
-    predictions_path = _resolve_data_path(config.TEST_PREDICTED_GRADES_PATH)
-    predictions_path.parent.mkdir(parents=True, exist_ok=True)
-
-    serialisable = {str(subject): float(score) for subject, score in predicted_grades.items()}
-
-    with predictions_path.open("w", encoding="utf-8") as handle:
-        json.dump(serialisable, handle, indent=4, sort_keys=True)
 
 
 def get_study_history() -> list[dict[str, str | float]]:

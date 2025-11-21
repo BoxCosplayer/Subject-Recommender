@@ -66,8 +66,6 @@ def generate_session_plan(
             session_date=run_date,
         )
         plans.append(plan)
-        # Refresh predictions so subsequent shots normalise against updated history averages.
-        _regenerate_predicted_grades(plan.history)
 
     return plans
 
@@ -208,17 +206,6 @@ def _calculate_predicted_grades_from_history(
         average_score = totals.get(subject, 0.0) / max(weight_totals.get(subject, 0.0), 1.0)
         predicted_grades[subject] = max(min(average_score / 100, 1.0), 0.0)
 
-    return predicted_grades
-
-
-def _regenerate_predicted_grades(history: Sequence[HistoryEntry]) -> dict[str, float]:
-    """Persist recalculated predicted grades using the current history snapshot.
-
-    Inputs: history (Sequence[HistoryEntry]): combined existing and synthetic entries to average.
-    Outputs: dict[str, float]: persisted predictions generated from weighted history scores.
-    """
-    predicted_grades = _calculate_predicted_grades_from_history(history)
-    io.write_predicted_grades(predicted_grades)
     return predicted_grades
 
 
