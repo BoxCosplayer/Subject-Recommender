@@ -2,9 +2,9 @@
 
 - Keep the repo layout clear: docs (`README.md`, `psudeocode.md`, `agents.md`) and config (`pyproject.toml`) stay at the root, business logic lives under `src/subject_recommender`, tests under `tests/`, and generated artifacts under `output/`.
 
-- Treat `config.py` as the canonical source for adjustable weights, “secret” parameters, and session defaults. Other modules should read configuration through helper functions so tests can override values.
+- Treat `config.py` as the canonical source for adjustable weights, secret parameters, and session defaults. Other modules should read configuration through helper functions so tests can override values.
 
-- Keep I/O concerns in `io.py`. Modules under `preprocessing` and `sessions` should only deal with in-memory data structures passed to them.
+- Keep I/O concerns in `io.py`; it is the single access layer for the SQLite database (`data/database.sqlite`). Modules under `preprocessing` and `sessions` should only deal with in-memory data structures passed to them.
 
 - Follow the preprocessing pipeline boundaries: `preprocessing.weighting` handles history iteration and weight application, `preprocessing.aggregation` computes averages/flooring, and `preprocessing.normalisation` normalizes scores and selects the next subject. Re-export the orchestration helper via `preprocessing.__init__`.
 
