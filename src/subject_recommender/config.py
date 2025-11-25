@@ -28,5 +28,6 @@ SESSION_COUNT = 8
 # should be === session_count ?
 SHOTS = 8
 
-# UserID
-USER_ID = 1
+# TESTING ONLY Data Path Overrides
+TEST_PREDICTED_GRADES_PATH = "gcse_test-predicted.json"
+TEST_HISTORY_PATH = "gcse_test-grades.json"

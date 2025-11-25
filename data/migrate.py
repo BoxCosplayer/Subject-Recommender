@@ -16,8 +16,8 @@ import json
 import sqlite3
 import sys
 import uuid
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
