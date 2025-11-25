@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import Any
 
-from . import config, preprocessing
+from . import config, preprocessing  # noqa: F401 - config imported for test patching
 from .history_reset import filter_history
 from .sessions import generate_session_plan
 from .sessions.generator import SessionPlan
