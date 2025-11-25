@@ -23,7 +23,6 @@ EVENT_TYPES: Sequence[str] = (
     "Topic Test",
     "Mock Exam",
     "Exam",
-    "Project",
 )
 
 
