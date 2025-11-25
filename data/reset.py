@@ -1,7 +1,7 @@
-"""Wrapper script to reset study-history files without relying on package imports.
+"""Wrapper script to reset study-history rows in the SQLite database.
 
-Inputs: Optional filename (str) under `data/` when executed directly; defaults to the configured dataset.
-Outputs: Filtered history JSON persisted back to disk and a printed status message.
+Inputs: None when executed directly; relies on configured database path and user ID.
+Outputs: Printed status message indicating the number of deleted rows.
 """
 
 from __future__ import annotations
@@ -9,29 +9,18 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from subject_recommender.history_reset import filter_history_file  # type: ignore  # noqa: E402
-from subject_recommender.history_reset import main as _package_main
-
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _SRC_PATH = _PROJECT_ROOT / "src"
 if str(_SRC_PATH) not in sys.path:
     sys.path.insert(0, str(_SRC_PATH))
 
+from subject_recommender.history_reset import main as _package_main  # noqa: E402
 
-def main(file_name: str | None = None) -> None:
-    """Delegate to the packaged history reset helper for standalone execution.
 
-    Inputs: file_name (str | None): optional dataset name; if omitted, the configured default is used.
-    Outputs: None: writes filtered history to disk and prints a short status message.
-    """
-    if file_name is None:
-        _package_main()
-        return
-    filtered_data = filter_history_file(file_name)
-    print(
-        f"Entries with type 'Revision' or 'Not Studied' have been removed from {file_name}. "
-        f"{len(filtered_data)} records remain."
-    )
+def main() -> None:
+    """Delegate to the packaged history reset helper for standalone execution."""
+
+    _package_main()
 
 
 if __name__ == "__main__":

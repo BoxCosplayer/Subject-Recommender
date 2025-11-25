@@ -1,21 +1,28 @@
-"""Script that generates synthetic grade history entries from predicted grades.
+"""Generate synthetic history entries from predicted grades stored in SQLite.
 
-This module reads a JSON file containing predicted subject performance values
-(floats between 0 and 1) and writes a new JSON file following the same event
-format as ``gcse_test-grades.json``. Inputs are provided through the command
-line: an input predicted grade file path and an optional output file path. The
-resulting JSON file is written to disk and contains objects with ``subject``,
-``type``, ``score`` (0.3-1.0), and ``date`` keys.
+Inputs:
+    CLI arguments controlling event counts, score ranges, topic bias, optional user ID override,
+    optional database path override, and random seed for reproducibility.
+Outputs:
+    History rows inserted into the configured SQLite database for the selected user, with a summary
+    printed to stdout.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
-import pathlib
 import random
-from collections.abc import Iterable, Sequence
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = PROJECT_ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+from subject_recommender import config, io  # noqa: E402
 
 EVENT_TYPES: Sequence[str] = (
     "Homework",
@@ -23,6 +30,7 @@ EVENT_TYPES: Sequence[str] = (
     "Topic Test",
     "Mock Exam",
     "Exam",
+    "Project",
 )
 
 
@@ -32,29 +40,20 @@ def parse_args() -> argparse.Namespace:
     Inputs:
         None directly; the function reads command line arguments via argparse.
     Outputs:
-        argparse.Namespace: Parsed arguments including file paths, generation
-            parameters, and random seed options.
+        argparse.Namespace containing generation parameters plus optional database overrides.
     """
 
     parser = argparse.ArgumentParser(
         description=(
-            "Generate a grade history JSON file from a predicted grades JSON "
-            "file. Scores are scaled between the requested minimum and maximum "
-            "values, defaulting to 0.3-1.0."
+            "Generate synthetic grade history entries from predicted grades stored in SQLite. "
+            "Scores are scaled between the requested minimum and maximum values, defaulting to 0.3-1.0."
         )
     )
+    parser.add_argument("--user-id", type=str, help="Override the configured user ID for which to generate history.")
     parser.add_argument(
-        "predicted_file",
-        type=pathlib.Path,
-        help="Path to the JSON file containing predicted grades.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=pathlib.Path,
-        help=(
-            "Optional output file path. When omitted, '-predicted' in the input filename is replaced with '-grades'."
-        ),
+        "--database",
+        type=Path,
+        help="Optional SQLite database path; defaults to the configured `DATABASE_PATH`.",
     )
     parser.add_argument(
         "--min-events",
@@ -117,11 +116,9 @@ def interpret_effective_boolean(value: str | bool, flag_name: str = "flag") -> b
     Inputs:
         value (str | bool): Value supplied via CLI or configuration that should
             behave like a boolean.
-        flag_name (str): Friendly name used to clarify potential error
-            messages.
+        flag_name (str): Friendly name used to clarify potential error messages.
     Outputs:
-        bool: True when the value represents an affirmative option, otherwise
-            False.
+        bool: True when the value represents an affirmative option, otherwise False.
     """
 
     if isinstance(value, bool):
@@ -139,44 +136,6 @@ def interpret_effective_boolean(value: str | bool, flag_name: str = "flag") -> b
         return False
 
     raise ValueError(f"Value '{value}' for '{flag_name}' could not be interpreted as a boolean.")
-
-
-def load_predicted_scores(predicted_path: pathlib.Path) -> dict[str, float]:
-    """Load the predicted scores from a JSON file into a subject mapping.
-
-    Inputs:
-        predicted_path (pathlib.Path): Location of the JSON file that stores
-            predicted grades either as a mapping or a list containing mappings.
-    Outputs:
-        Dict[str, float]: Dictionary where keys are subject names and values
-            are predicted performance values scaled 0-1.
-    """
-
-    with predicted_path.open("r", encoding="utf-8") as handle:
-        raw_data = json.load(handle)
-
-    if isinstance(raw_data, dict):
-        dataset: Iterable[dict[str, float]] = (raw_data,)
-    elif isinstance(raw_data, list):
-        dataset = raw_data
-    else:
-        raise ValueError("Predicted grades file must contain a dictionary or a list of dictionaries.")
-
-    merged: dict[str, float] = {}
-    for entry in dataset:
-        if not isinstance(entry, dict):
-            raise ValueError("Each predicted grade entry must be a JSON object.")
-        for subject, value in entry.items():
-            try:
-                score = float(value)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Predicted score for '{subject}' must be numeric.") from exc
-            merged[subject] = score
-
-    if not merged:
-        raise ValueError("No predicted scores found in the supplied file.")
-
-    return merged
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -297,8 +256,7 @@ def generate_history_records(
     """Create the per-subject history records.
 
     Inputs:
-        predicted_scores (Dict[str, float]): Subject names mapped to predicted
-            values.
+        predicted_scores (Dict[str, float]): Subject names mapped to predicted values.
         rng (random.Random): Random number generator for reproducibility.
         min_events (int): Minimum event count per subject.
         max_events (int): Maximum event count per subject.
@@ -309,8 +267,7 @@ def generate_history_records(
         topics (bool): Indicates whether predicted grades describe topics, so
             low predicted scores receive additional downward bias.
     Outputs:
-        List[Dict[str, object]]: List of dictionaries ready to be dumped to
-            JSON following the required format.
+        List[Dict[str, object]]: List of dictionaries ready to be written to the database.
     """
 
     records: list[dict[str, object]] = []
@@ -338,38 +295,13 @@ def generate_history_records(
     return sorted(records, key=lambda item: item["date"], reverse=True)
 
 
-def determine_output_path(predicted_path: pathlib.Path, explicit: pathlib.Path | None) -> pathlib.Path:
-    """Determine the output file path based on an optional override.
+def _apply_overrides(database: Path | None, user_id: str | None) -> None:
+    """Override configuration for database path and user id when provided."""
 
-    Inputs:
-        predicted_path (pathlib.Path): Input predicted grades path.
-        explicit (pathlib.Path | None): User supplied output path, if any.
-    Outputs:
-        pathlib.Path: File path where the generated history JSON should be written.
-    """
-
-    if explicit:
-        return explicit
-
-    replaced_name = predicted_path.name.replace("-predicted", "-grades")
-    if replaced_name == predicted_path.name:
-        replaced_name = predicted_path.stem + "-grades.json"
-    return predicted_path.with_name(replaced_name)
-
-
-def write_history(records: Sequence[dict[str, object]], output_path: pathlib.Path) -> None:
-    """Persist the generated history records to disk.
-
-    Inputs:
-        records (Sequence[Dict[str, object]]): List of event dictionaries to write.
-        output_path (pathlib.Path): File path for the resulting JSON file.
-    Outputs:
-        None directly; the function creates or overwrites output_path on disk.
-    """
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as handle:
-        json.dump(records, handle, indent=4)
+    if database:
+        config.DATABASE_PATH = Path(database)  # type: ignore[attr-defined]
+    if user_id:
+        config.DATABASE_USER_ID = str(user_id)  # type: ignore[attr-defined]
 
 
 def main() -> None:
@@ -378,8 +310,8 @@ def main() -> None:
     Inputs:
         None directly; configuration is derived from command line arguments.
     Outputs:
-        None explicitly; side effects include writing the target JSON file and
-            printing the destination path for the user's convenience.
+        None explicitly; side effects include writing history rows to the database and
+        printing the inserted record count for the user's convenience.
     """
 
     args = parse_args()
@@ -390,9 +322,10 @@ def main() -> None:
     if args.min_score >= args.max_score:
         raise ValueError("Minimum score must be less than maximum score.")
 
+    _apply_overrides(args.database, args.user_id)
+
     rng = random.Random(args.seed)
-    predicted_scores = load_predicted_scores(args.predicted_file)
-    output_path = determine_output_path(args.predicted_file, args.output)
+    predicted_scores = io.get_predicted_grades()
     topics_flag = interpret_effective_boolean(args.topics, flag_name="topics")
 
     records = generate_history_records(
@@ -407,8 +340,8 @@ def main() -> None:
         topics=topics_flag,
     )
 
-    write_history(records, output_path)
-    print(f"Generated history written to {output_path}")
+    inserted = io.append_history_entries(records)
+    print(f"Generated {inserted} history entries for user '{config.DATABASE_USER_ID}' into {config.DATABASE_PATH}.")
 
 
 if __name__ == "__main__":

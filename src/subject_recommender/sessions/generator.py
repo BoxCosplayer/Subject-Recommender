@@ -8,15 +8,15 @@ entries that should be appended for persistence.
 
 from __future__ import annotations
 
-import json
 import math
+import random
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from math import sin
 
-from .. import config, io, preprocessing
+from .. import io, preprocessing
 from ..preprocessing.weighting import HistoryEntry
 
 
@@ -25,7 +25,7 @@ class SessionPlan:
     """Immutable representation of a generated study plan.
 
     Attributes:
-        subjects: Ordered list[str] representing which subject to study per session.
+        subjects: Shuffled list[str] representing which subject to study per session.
         new_entries: list[dict[str, str | float]] describing synthetic history rows.
         history: list[dict[str, str | float]] representing the base history plus new entries.
     """
@@ -247,26 +247,27 @@ def _build_not_studied_entries(
     return entries
 
 
+def _shuffle_subjects(subjects: list[str]) -> list[str]:
+    """Return a shuffled copy of the supplied subjects list for output display.
+
+    Inputs: subjects (list[str]): ordered subjects selected during plan generation.
+    Outputs: list[str]: shuffled copy to reduce positional predictability.
+    """
+    shuffled = list(subjects)
+    random.shuffle(shuffled)
+    return shuffled
+
+
 def _persist_history(new_entries: Sequence[dict[str, str | float]]) -> None:
     """Append newly generated entries to the persisted history dataset.
 
-    Inputs: Sequence of history entry dictionaries to persist on disk.
-    Outputs: None (side-effect writes JSON to the configured predictions path via `io` helper).
+    Inputs: Sequence of history entry dictionaries to persist into SQLite.
+    Outputs: None (side-effect writes to the database via `io` helper).
     """
     if not new_entries:
         return
 
-    dataset_filename = config.TEST_HISTORY_PATH
-    history_path = io._resolve_data_path(dataset_filename)  # pylint: disable=protected-access
-    history = []
-    if history_path.exists():
-        with history_path.open("r", encoding="utf-8-sig") as handle:
-            history = json.load(handle)
-
-    history.extend(dict(entry) for entry in new_entries)
-
-    with history_path.open("w", encoding="utf-8") as handle:
-        json.dump(history, handle, indent=4)
+    io.append_history_entries(new_entries)
 
 
 def _run_single_plan(
@@ -324,7 +325,7 @@ def _run_single_plan(
     persisted_entries = session_entries + not_studied_entries
 
     plan = SessionPlan(
-        subjects=list(subjects),
+        subjects=_shuffle_subjects(subjects),
         new_entries=[dict(entry) for entry in persisted_entries],
         history=[dict(entry) for entry in local_history],
     )

@@ -72,9 +72,8 @@ def test_format_analysis_mentions_recommendation(monkeypatch: pytest.MonkeyPatch
     assert "Overall session insights" in summary
     assert "Shots executed: 1" in summary
     assert "Subject frequency" in summary
-    assert "First repeat detected at session 3" in summary
-    assert "Suggested SESSION_COUNT cap" in summary
-    assert "Normalised score similarity" in summary
+    assert "Total sessions scheduled" in summary
+    assert "Unique subjects scheduled" in summary
 
 
 def test_format_analysis_handles_empty_run() -> None:
@@ -89,7 +88,7 @@ def test_format_analysis_handles_missing_normalised_scores(monkeypatch: pytest.M
     """Ensure `_format_analysis` reports unavailable similarity metrics when no scores exist.
 
     Inputs: SessionPlan containing at least one subject and a monkeypatched normalised score response of `{}`.
-    Outputs: Summary string mentioning that normalised score similarity data is unavailable.
+    Outputs: Summary string containing the basic insight lines.
     """
 
     plans = [SessionPlan(subjects=["Physics"], new_entries=[], history=[])]
@@ -97,7 +96,8 @@ def test_format_analysis_handles_missing_normalised_scores(monkeypatch: pytest.M
 
     summary = cli._format_analysis(plans)
 
-    assert "Normalised score similarity: unavailable" in summary
+    assert "Overall session insights" in summary
+    assert "Subject frequency" in summary
 
 
 def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -113,7 +113,7 @@ def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: 
     captured = capsys.readouterr().out.strip()
     assert "Study session plan" in captured
     assert "Overall session insights" in captured
-    assert "Suggested SESSION_COUNT cap" in captured
+    assert "Subject frequency" in captured
 
 
 def test_main_handles_multiple_shots(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -146,18 +146,18 @@ def test_main_resets_history_when_flagged(monkeypatch: pytest.MonkeyPatch, capsy
     monkeypatch.setattr(cli, "generate_session_plan", lambda: [plan])
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 3)
 
-    calls: dict[str, str | None] = {"file": None}
+    calls: dict[str, int] = {"count": 0}
 
-    def fake_reset(file_name: str) -> list[dict[str, object]]:
-        calls["file"] = file_name
-        return []
+    def fake_reset() -> int:
+        calls["count"] += 1
+        return 5
 
-    monkeypatch.setattr(cli, "filter_history_file", fake_reset)
+    monkeypatch.setattr(cli, "filter_history", fake_reset)
 
     cli.main(["--reset"])
 
     captured = capsys.readouterr().out.strip()
-    assert calls["file"] == cli.config.TEST_HISTORY_PATH
+    assert calls["count"] == 1
     assert "History reset applied" in captured
 
 

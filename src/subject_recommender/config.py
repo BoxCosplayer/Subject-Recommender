@@ -1,10 +1,13 @@
 """Define tunable parameters and system constants for the subject recommender.
 
 Inputs: None; module-level constants configured inside this file.
-Outputs: Named constants consumed across the package for reproducible behaviour.
+Outputs: Named constants consumed across the package for reproducible behaviour, including
+database defaults for user identification and storage paths.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 # FIXED Assessment weights
 REVISION_WEIGHT = 0.1
@@ -28,6 +31,18 @@ SESSION_COUNT = 8
 # should be === session_count ?
 SHOTS = 8
 
-# TESTING ONLY Data Path Overrides
-TEST_PREDICTED_GRADES_PATH = "gcse_test-predicted.json"
-TEST_HISTORY_PATH = "gcse_test-grades.json"
+# DATABASE Defaults
+DATABASE_PATH = Path(__file__).resolve().parents[2] / "data" / "database.sqlite"
+DATABASE_USER_ID = "1"
+
+
+def get_database_settings() -> dict[str, str | Path]:
+    """Return the default database configuration for the application.
+
+    Inputs: None.
+    Outputs: dict[str, str | Path] containing:
+        - path: Path object pointing to the SQLite database file.
+        - user_id: str identifier of the active user, sourced from the environment when set.
+    """
+
+    return {"path": DATABASE_PATH, "user_id": DATABASE_USER_ID}

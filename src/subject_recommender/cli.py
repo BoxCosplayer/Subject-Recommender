@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from . import config, preprocessing
-from .history_reset import filter_history_file
+from .history_reset import filter_history
 from .sessions import generate_session_plan
 from .sessions.generator import SessionPlan
 
@@ -140,38 +140,6 @@ def _format_analysis(plans: list[SessionPlan]) -> str:
         f"- Subject frequency: {frequency_text}",
     ]
 
-    normalised_scores = analysis.get("normalised_scores", {})
-    normalised_similarity = analysis.get("normalised_similarity", {})
-
-    if normalised_scores:
-        similarity_items = sorted(
-            normalised_scores.items(),
-            key=lambda item: (-item[1], item[0]),
-        )
-        similarity_text = ", ".join(
-            f"{subject}: {score:.3f} (similarity {normalised_similarity.get(subject, 0.0):.2f})"
-            for subject, score in similarity_items
-        )
-        lines.append(f"- Normalised score similarity (relative to highest): {similarity_text}")
-    else:
-        lines.append("- Normalised score similarity: unavailable (no scores to compare).")
-
-    lines.append(
-        f"- Longest streak: {analysis['longest_streak_subject'] or 'N/A'} ({analysis['longest_streak']} sessions)",
-    )
-
-    if analysis["first_repeat_position"]:
-        lines.append(
-            f"- First repeat detected at session {analysis['first_repeat_position']}",
-        )
-    else:
-        lines.append("- No repeated subjects within this run.")
-
-    recommended_cap = analysis["recommended_session_cap"]
-    lines.append(
-        f"- Suggested SESSION_COUNT cap: {recommended_cap} (current: {config.SESSION_COUNT})",
-    )
-
     return "\n".join(lines)
 
 
@@ -191,15 +159,15 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _reset_history() -> list[dict[str, object]]:
-    """Invoke the data reset helper using the configured history filename.
+def _reset_history() -> int:
+    """Invoke the data reset helper against the database-backed history.
 
-    Inputs: None (uses `config.TEST_HISTORY_PATH` to locate the dataset).
-    Outputs: list[dict[str, object]] representing the filtered history after reset.
+    Inputs: None.
+    Outputs: int representing the number of deleted rows.
     """
-    filtered_history = filter_history_file(config.TEST_HISTORY_PATH)
-    print(f"History reset applied to {config.TEST_HISTORY_PATH}.")
-    return filtered_history
+    deleted = filter_history()
+    print("History reset applied to database-backed history.")
+    return deleted
 
 
 def main(argv: Sequence[str] | None = None) -> None:

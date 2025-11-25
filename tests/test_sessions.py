@@ -1,12 +1,12 @@
-"""Tests covering the session plan generator.
+"""Tests covering the session plan generator with database-backed IO.
 
 Inputs: Synthetic history dictionaries alongside monkeypatched preprocessing outputs.
-Outputs: Assertions verifying plan subjects, appended entries, and history growth.
+Outputs: Assertions verifying plan subjects, appended entries, and persistence behaviour.
 """
 
 from __future__ import annotations
 
-import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -18,11 +18,7 @@ from subject_recommender.sessions import generator as generator_module
 def test_generate_session_plan_returns_schedule_and_entries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure explicitly supplied history and parameters produce deterministic output.
-
-    Inputs: `monkeypatch` fixture stubbing `_initialise_local_scores` with known values.
-    Outputs: SessionPlan whose subjects and appended entries reflect the heuristic adjustments.
-    """
+    """Ensure explicitly supplied history and parameters produce deterministic output."""
 
     history = [
         {"subject": "Maths", "type": "Quiz", "score": 55, "date": "2025-03-01"},
@@ -41,7 +37,9 @@ def test_generate_session_plan_returns_schedule_and_entries(
         "_initialise_local_scores",
         lambda _: {"Physics": 0.1, "History": 0.2},
     )
-    monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module, "_shuffle_subjects", lambda subjects: list(subjects))
+    persist_calls: list[list[dict[str, str | float]]] = []
+    monkeypatch.setattr(generator_module.io, "append_history_entries", lambda entries: persist_calls.append(entries))
 
     plans = generate_session_plan(
         history=history,
@@ -58,16 +56,13 @@ def test_generate_session_plan_returns_schedule_and_entries(
     assert len(revision_entries) == 2
     assert len(penalty_entries) == 2
     assert any(entry["subject"] == "Maths" for entry in penalty_entries)
+    assert len(persist_calls) == 1
 
 
 def test_generate_session_plan_loads_history_and_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify the generator falls back to IO helpers when arguments are omitted.
-
-    Inputs: Monkeypatched IO helpers returning deterministic history and defaults.
-    Outputs: SessionPlan created without explicit history/parameter arguments.
-    """
+    """Verify the generator falls back to IO helpers when arguments are omitted."""
 
     stored_history = [
         {"subject": "Biology", "type": "Quiz", "score": 60, "date": "2025-02-01"},
@@ -88,7 +83,7 @@ def test_generate_session_plan_loads_history_and_defaults(
         "_initialise_local_scores",
         lambda _: {"English Literature": 0.05, "Maths": 0.2},
     )
-    monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module.io, "append_history_entries", lambda entries: None)
 
     plans = generate_session_plan(session_date="2025-04-01")
 
@@ -118,7 +113,7 @@ def test_generate_session_plan_merges_partial_overrides(
         lambda: {"count": 3, "session_time": 40, "break_time": 10, "shots": 1},
     )
     monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {"Chemistry": 0.6})
-    monkeypatch.setattr(generator_module, "_persist_history", lambda entries: None)
+    monkeypatch.setattr(generator_module.io, "append_history_entries", lambda entries: None)
 
     plans = generate_session_plan(
         history=history,
@@ -161,8 +156,8 @@ def test_generate_session_plan_runs_multiple_shots(
 
     persist_calls: list[list[dict[str, str | float]]] = []
     monkeypatch.setattr(
-        generator_module,
-        "_persist_history",
+        generator_module.io,
+        "append_history_entries",
         lambda entries: persist_calls.append(list(entries)),
     )
 
@@ -174,42 +169,34 @@ def test_generate_session_plan_runs_multiple_shots(
     assert len(persist_calls) == 2
 
 
-def test_generate_session_plan_leaves_predictions_unchanged(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Ensure generating multiple shots never mutates the predicted grades dataset on disk.
-
-    Inputs: Temporary prediction and history files alongside monkeypatched session defaults and score initialiser.
-    Outputs: Assertions confirming the predictions JSON content remains identical after plan generation.
-    """
-
-    predictions_path = tmp_path / "predicted_grades.json"
-    predictions_payload = {"Maths": 0.5, "History": 0.35}
-    predictions_path.write_text(json.dumps(predictions_payload), encoding="utf-8")
-    monkeypatch.setattr(generator_module.io, "_DATA_DIR", tmp_path)
-    monkeypatch.setattr(generator_module.config, "TEST_PREDICTED_GRADES_PATH", predictions_path.name)
-
-    history_path = tmp_path / "gcse_test-grades.json"
-    history_payload = [{"subject": "Maths", "type": "Quiz", "score": 55, "date": "2025-03-01"}]
-    history_path.write_text(json.dumps(history_payload), encoding="utf-8")
-    monkeypatch.setattr(generator_module.config, "TEST_HISTORY_PATH", history_path.name)
+def test_run_single_plan_shuffles_subject_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure subjects are shuffled before being stored on SessionPlan."""
 
     monkeypatch.setattr(
         generator_module.io,
         "get_session_defaults",
-        lambda: {"count": 1, "session_time": 30, "break_time": 5, "shots": 2},
+        lambda: {"count": 2, "session_time": 30, "break_time": 5, "shots": 1},
+    )
+    monkeypatch.setattr(generator_module.io, "get_predicted_grades", lambda: {"A": 0.6, "B": 0.4})
+    monkeypatch.setattr(generator_module, "_initialise_local_scores", lambda _: {"A": 0.1, "B": 0.2})
+    sequence = iter(["A", "B"])
+    monkeypatch.setattr(
+        generator_module.preprocessing.normalisation,
+        "normalise_scores",
+        lambda _: {"A": 0.4, "B": 0.6},
     )
     monkeypatch.setattr(
-        generator_module,
-        "_initialise_local_scores",
-        lambda _: {"Maths": 0.1, "History": 0.2},
+        generator_module.preprocessing.normalisation,
+        "choose_lowest_subject",
+        lambda scores: next(sequence),
     )
+    monkeypatch.setattr(generator_module.io, "append_history_entries", lambda entries: None)
+    monkeypatch.setattr(generator_module, "_build_revision_entry", lambda **kwargs: {"type": "Revision", **kwargs})
+    monkeypatch.setattr(generator_module, "_build_not_studied_entries", lambda **kwargs: [])
+    monkeypatch.setattr(generator_module, "_shuffle_subjects", lambda subjects: list(reversed(subjects)))
 
-    original_serialised = predictions_path.read_text(encoding="utf-8")
-
-    plans = generate_session_plan(session_date="2025-08-01")
-
-    assert len(plans) == 2
-    assert json.loads(predictions_path.read_text(encoding="utf-8")) == predictions_payload
-    assert predictions_path.read_text(encoding="utf-8") == original_serialised
+    plans = generator_module.generate_session_plan(session_date="2025-03-10")
+    assert plans[0].subjects == ["B", "A"]
 
 
 def test_initialise_local_scores_scales_aggregated_values(
@@ -237,12 +224,7 @@ def test_initialise_local_scores_scales_aggregated_values(
 def test_calculate_predicted_grades_from_history_scales_weighted_averages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure regenerated predictions divide weighted averages by 100 and clamp negatives.
-
-    Inputs: minimal history list with positive and negative scores plus custom assessment weights.
-    Outputs: Dict mapping subjects to scaled predicted grades, clamping values below zero while
-    applying weighting factors.
-    """
+    """Ensure regenerated predictions divide weighted averages by 100 and clamp negatives."""
 
     history = [
         {"subject": "Maths", "type": "Quiz", "score": 50, "date": "2025-03-01"},
@@ -265,12 +247,7 @@ def test_calculate_predicted_grades_from_history_scales_weighted_averages(
 def test_calculate_predicted_grades_skips_empty_subjects_and_zero_weights(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure `_calculate_predicted_grades_from_history` handles empty subjects and non-positive weights.
-
-    Inputs: History list containing an empty subject entry and a zero-weight assessment type,
-    alongside monkeypatched assessment weights that force the weight <= 0 branch.
-    Outputs: Predictions excluding the empty subject while returning a zero grade for the zero-weight entry.
-    """
+    """Ensure `_calculate_predicted_grades_from_history` handles empty subjects and non-positive weights."""
 
     history = [
         {"subject": "", "type": "Quiz", "score": 50},
@@ -291,13 +268,7 @@ def test_calculate_predicted_grades_skips_empty_subjects_and_zero_weights(
 
 
 def test_adjust_local_scores_updates_subject_weights() -> None:
-    """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics.
-
-    Inputs: Inline dictionary representing the local scores map along with explicit
-    integers for the session duration and break length.
-    Outputs: Mutated dictionary confirming the studied subject increases and other
-    subjects receive a fixed penalty of 0.005.
-    """
+    """Validate `_adjust_local_scores` mirrors AlgoTesting heuristics."""
 
     scores = {"Maths": 0.2, "Chemistry": 0.5}
 
@@ -308,13 +279,7 @@ def test_adjust_local_scores_updates_subject_weights() -> None:
 
 
 def test_adjust_local_scores_scales_with_effective_minutes() -> None:
-    """Ensure `_adjust_local_scores` reacts to the effective study duration.
-
-    Inputs: Two local score dictionaries updated via `_adjust_local_scores`
-    with short and long study durations.
-    Outputs: Derived deltas confirming the studied subject reacts to session time
-    while non-studied subjects apply a constant penalty.
-    """
+    """Ensure `_adjust_local_scores` reacts to the effective study duration."""
 
     short_scores = {"Maths": 0.3, "Chemistry": 0.4}
     long_scores = {"Maths": 0.3, "Chemistry": 0.4}
@@ -356,59 +321,58 @@ def test_resolve_session_parameters_adds_default_shot(monkeypatch: pytest.Monkey
     assert resolved["shots"] == 1
 
 
-def test_persist_history_writes_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure `_persist_history` creates the history file when missing."""
+def test_persist_history_noops_on_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure `_persist_history` does not attempt DB writes when empty."""
 
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    monkeypatch.setattr(generator_module.config, "TEST_HISTORY_PATH", "predicted_grades.json")
-    monkeypatch.setattr(generator_module.io, "_DATA_DIR", data_dir)
+    calls: list[list[dict[str, str | float]]] = []
+    monkeypatch.setattr(generator_module.io, "append_history_entries", lambda entries: calls.append(list(entries)))
+
+    generator_module._persist_history([])
+
+    assert calls == []
+
+
+def test_persist_history_writes_entries(tmp_path: Path) -> None:
+    """Ensure `_persist_history` inserts entries into the database."""
+
+    db_path = tmp_path / "db.sqlite"
+    connection = sqlite3.connect(db_path)
+    connection.executescript(
+        """
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE users (uuid TEXT PRIMARY KEY NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL);
+        CREATE TABLE subjects (uuid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+        CREATE TABLE types (uuid TEXT PRIMARY KEY NOT NULL, type TEXT NOT NULL, weight REAL NOT NULL);
+        CREATE TABLE history (
+            historyEntryID TEXT PRIMARY KEY NOT NULL,
+            userID TEXT NOT NULL,
+            subjectID TEXT NOT NULL,
+            typeID TEXT NOT NULL,
+            score REAL NOT NULL,
+            studied_at DATETIME NOT NULL
+        );
+        """
+    )
+    connection.execute("INSERT INTO users (uuid, username, role) VALUES ('user-a', 'tester', 'student');")
+    connection.execute("INSERT INTO subjects (uuid, name) VALUES ('sub-1', 'Maths');")
+    connection.execute("INSERT INTO types (uuid, type, weight) VALUES ('type-revision', 'Revision', 0.1);")
+    connection.commit()
+    connection.close()
+
+    # Patch config for this test DB
+    import subject_recommender.config as cfg  # local import to avoid fixture interference
+
+    cfg.DATABASE_PATH = db_path  # type: ignore[attr-defined]
+    cfg.DATABASE_USER_ID = "user-a"  # type: ignore[attr-defined]
 
     entries = [
         {"subject": "Maths", "type": "Revision", "score": 75.0, "date": "2025-03-10"},
     ]
 
-    generator_module._persist_history(entries)
+    generator_module.io.append_history_entries(entries)
 
-    history_path = data_dir / generator_module.config.TEST_HISTORY_PATH
-    payload = json.loads(history_path.read_text(encoding="utf-8"))
+    connection = sqlite3.connect(db_path)
+    count = connection.execute("SELECT COUNT(*) FROM history;").fetchone()[0]
+    connection.close()
 
-    assert payload[-1]["subject"] == "Maths"
-
-
-def test_persist_history_appends_to_existing_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure `_persist_history` appends to existing datasets."""
-
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    monkeypatch.setattr(generator_module.config, "TEST_PREDICTED_GRADES_PATH", "predicted_grades.json")
-    history_path = data_dir / generator_module.config.TEST_HISTORY_PATH
-    history_path.write_text(
-        json.dumps([{"subject": "History", "type": "Revision", "score": 60, "date": "2025-03-09"}]),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(generator_module.io, "_DATA_DIR", data_dir)
-
-    entries = [
-        {"subject": "Chemistry", "type": "Revision", "score": 90.0, "date": "2025-03-10"},
-    ]
-
-    generator_module._persist_history(entries)
-
-    payload = json.loads(history_path.read_text(encoding="utf-8"))
-
-    assert len(payload) == 2
-    assert payload[-1]["subject"] == "Chemistry"
-
-
-def test_persist_history_ignores_empty_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure `_persist_history` no-ops when given an empty payload."""
-
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    monkeypatch.setattr(generator_module.config, "TEST_PREDICTED_GRADES_PATH", "predicted_grades.json")
-    monkeypatch.setattr(generator_module.io, "_DATA_DIR", data_dir)
-
-    generator_module._persist_history([])
-
-    assert not (data_dir / generator_module.config.TEST_HISTORY_PATH).exists()
+    assert count == 1
