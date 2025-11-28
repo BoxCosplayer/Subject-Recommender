@@ -23,7 +23,7 @@ DATE_WEIGHT_MIN = 0
 DATE_WEIGHT_MAX = 1
 
 
-# TUNABLE Session Parameters
+# Default session parameters (CLI overrides can provide runtime values)
 SESSION_TIME_MINUTES = 45
 BREAK_TIME_MINUTES = 15
 # should be set to ~75% of the no. subjects / topics
@@ -31,7 +31,7 @@ SESSION_COUNT = 8
 # should be === session_count ?
 SHOTS = 8
 
-# DATABASE Defaults
+# DATABASE Defaults (overridable via CLI flags when invoking the tool)
 DATABASE_PATH = Path(__file__).resolve().parents[2] / "data" / "database.sqlite"
 DATABASE_USER_ID = "1"
 

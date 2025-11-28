@@ -104,7 +104,7 @@ def test_main_prints_plan_and_analysis(monkeypatch: pytest.MonkeyPatch, capsys: 
     """Confirm the CLI entry point prints both the plan and the insights."""
 
     plan = SessionPlan(subjects=["Physics", "Chemistry"], new_entries=[], history=[])
-    monkeypatch.setattr(cli, "generate_session_plan", lambda: [plan])
+    monkeypatch.setattr(cli, "generate_session_plan", lambda **_: [plan])
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 5)
     monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Physics": 0.7})
 
@@ -123,7 +123,7 @@ def test_main_handles_multiple_shots(monkeypatch: pytest.MonkeyPatch, capsys: py
         SessionPlan(subjects=["Physics"], new_entries=[], history=[]),
         SessionPlan(subjects=["Chemistry"], new_entries=[], history=[]),
     ]
-    monkeypatch.setattr(cli, "generate_session_plan", lambda: plans)
+    monkeypatch.setattr(cli, "generate_session_plan", lambda **_: plans)
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 5)
     monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Chemistry": 0.5})
 
@@ -143,8 +143,9 @@ def test_main_resets_history_when_flagged(monkeypatch: pytest.MonkeyPatch, capsy
     """
 
     plan = SessionPlan(subjects=["Physics"], new_entries=[], history=[])
-    monkeypatch.setattr(cli, "generate_session_plan", lambda: [plan])
+    monkeypatch.setattr(cli, "generate_session_plan", lambda **_: [plan])
     monkeypatch.setattr(cli.config, "SESSION_COUNT", 3)
+    monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Physics": 1.0})
 
     calls: dict[str, int] = {"count": 0}
 
@@ -159,6 +160,45 @@ def test_main_resets_history_when_flagged(monkeypatch: pytest.MonkeyPatch, capsy
     captured = capsys.readouterr().out.strip()
     assert calls["count"] == 1
     assert "History reset applied" in captured
+
+
+def test_main_accepts_session_overrides(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """Ensure CLI flags override session parameters and user identification.
+
+    Inputs: Monkeypatched session plan generator capturing provided overrides and CLI flag values.
+    Outputs: Assertions covering propagated session defaults, shot count, and the configured user ID.
+    """
+
+    plan = SessionPlan(subjects=["Biology"], new_entries=[], history=[])
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(cli.config, "DATABASE_USER_ID", cli.config.DATABASE_USER_ID)
+
+    def fake_generate_session_plan(**kwargs: object) -> list[SessionPlan]:
+        observed["session_parameters"] = kwargs.get("session_parameters")
+        observed["shots"] = kwargs.get("shots")
+        return [plan]
+
+    monkeypatch.setattr(cli, "generate_session_plan", fake_generate_session_plan)
+    monkeypatch.setattr(cli.preprocessing, "calculate_normalised_scores", lambda _: {"Biology": 1.0})
+    cli.main(
+        [
+            "--session-count",
+            "2",
+            "--session-time",
+            "30",
+            "--break-time",
+            "10",
+            "--shots",
+            "3",
+            "--user-id",
+            "cli-user",
+        ]
+    )
+
+    capsys.readouterr()
+    assert observed["session_parameters"] == {"count": 2, "session_time": 30, "break_time": 10, "shots": 3}
+    assert observed["shots"] == 3
+    assert cli.config.DATABASE_USER_ID == "cli-user"
 
 
 def test_calculate_score_similarity_scales_range() -> None:

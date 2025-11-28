@@ -6,7 +6,7 @@ Subject Recommender builds balanced study plans from assessment history and pred
 - Weighted scoring that combines assessment-type weights, time decay, and predicted grade fallbacks.
 - Multi-shot plan generation that discourages immediate repeats, applies penalties for skipped subjects, shuffles subject order for output, and persists synthetic history entries.
 - Configuration-first design: all tunables (weights, session timings, database defaults) live in `src/subject_recommender/config.py` and are consumed via IO helpers.
-- Command-line entry point `subject-recommender` with an optional history reset flag.
+- Command-line entry point `subject-recommender` with an optional history reset flag plus runtime overrides for session timings, shot counts, and the active user.
 - Data utilities for creating synthetic history from predictions and cleaning revision artifacts directly in SQLite.
 
 ## Repository Layout
@@ -17,10 +17,10 @@ Subject Recommender builds balanced study plans from assessment history and pred
 
 ## Data Inputs
 - All data lives in `data/database.sqlite` (schema in `data/schema.txt`):
-  - `users(uuid, username, role)` must contain the active user ID from `config.DATABASE_USER_ID`.
+  - `users(uuid, username, role)` must contain the active user ID from `config.DATABASE_USER_ID` (or the `--user-id` CLI override).
   - `types(uuid, type, weight)` seeds assessment labels and their weights (e.g. Revision 0.1, Homework 0.2, Quiz 0.3, Topic Test 0.4, Mock Exam 0.5, Exam 0.6).
   - `subjects(uuid, name)` lists the available subjects.
-  - `predictedGrades(predictedGradeID, userID, subjectID, score)` holds predicted grades (0–1) per subject for the configured user.
+  - `predictedGrades(predictedGradeID, userID, subjectID, score)` holds predicted grades (0-1) per subject for the configured user.
   - `history(historyEntryID, userID, subjectID, typeID, score, studied_at)` stores study history with scores and ISO dates.
 - Date weighting uses `DATE_WEIGHT_ZERO_DAY_THRESHOLD`, `DATE_WEIGHT_MIN`, and `DATE_WEIGHT_MAX` from `config.py` to decay the impact of older results.
 
@@ -43,9 +43,13 @@ pip install -e .[dev]
 ```
 subject-recommender
 ```
-The command reads the configured database, prints each shot’s schedule (shuffled subjects), and appends `Revision`/`Not Studied` entries to the history table. To reset the history after a run, add `--reset`:
+The command reads the configured database, prints each shot's schedule (shuffled subjects), and appends `Revision`/`Not Studied` entries to the history table. To reset the history after a run, add `--reset`:
 ```
 subject-recommender --reset
+```
+You can override session settings and the active user without editing `config.py`:
+```
+subject-recommender --session-count 6 --session-time 40 --break-time 10 --shots 2 --user-id demo-user
 ```
 You can also run directly via Python: `python -m subject_recommender.cli`.
 

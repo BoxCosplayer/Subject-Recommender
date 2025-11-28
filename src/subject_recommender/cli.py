@@ -1,6 +1,7 @@
 """Provide a minimal command-line interface for generating a study plan.
 
-Inputs: Optional CLI flags such as `-r/--reset` to clean configured history datasets.
+Inputs: Optional CLI flags such as `-r/--reset` to clean configured history datasets and
+runtime overrides for session timings, session counts, shot repetitions, and user selection.
 Outputs: Printed list of subjects representing the generated session sequence and analysis.
 """
 
@@ -147,7 +148,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse recognised CLI arguments for the subject recommender command.
 
     Inputs: argv (Sequence[str] | None): optional argument list excluding the program name.
-    Outputs: argparse.Namespace containing parsed flags such as `reset`.
+    Outputs: argparse.Namespace containing parsed flags such as `reset`, session defaults,
+    and the active user identifier.
     """
     parser = argparse.ArgumentParser(description="Generate a study plan and supporting insights.")
     parser.add_argument(
@@ -155,6 +157,41 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--reset",
         action="store_true",
         help="Reset the configured history dataset after generating the plan.",
+    )
+    parser.add_argument(
+        "-c",
+        "--session-count",
+        type=int,
+        default=config.SESSION_COUNT,
+        help="Number of study sessions to schedule per shot (defaults to configuration).",
+    )
+    parser.add_argument(
+        "-t",
+        "--session-time",
+        type=int,
+        default=config.SESSION_TIME_MINUTES,
+        help="Duration of each study session in minutes (defaults to configuration).",
+    )
+    parser.add_argument(
+        "-b",
+        "--break-time",
+        type=int,
+        default=config.BREAK_TIME_MINUTES,
+        help="Break duration in minutes to subtract when calculating scores (defaults to configuration).",
+    )
+    parser.add_argument(
+        "-s",
+        "--shots",
+        type=int,
+        default=config.SHOTS,
+        help="Number of sequential shots (full plan runs) to execute (defaults to configuration).",
+    )
+    parser.add_argument(
+        "-u",
+        "--user-id",
+        type=str,
+        default=config.DATABASE_USER_ID,
+        help="User identifier to target when reading and writing SQLite-backed data (defaults to configuration).",
     )
     return parser.parse_args(argv)
 
@@ -177,7 +214,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     Outputs: Printed study plan text and analysis streamed to standard output.
     """
     args = _parse_args(argv)
-    plans = generate_session_plan()
+    config.DATABASE_USER_ID = str(args.user_id)
+    session_parameters = {
+        "count": args.session_count,
+        "session_time": args.session_time,
+        "break_time": args.break_time,
+        "shots": args.shots,
+    }
+
+    plans = generate_session_plan(session_parameters=session_parameters, shots=args.shots)
     for index, plan in enumerate(plans, start=1):
         print(_format_plan(plan, shot_number=index if len(plans) > 1 else None))
 
