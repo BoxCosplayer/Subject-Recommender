@@ -33,9 +33,11 @@ Subject Recommender builds balanced study plans from assessment history and pred
 
 ## Usage
 ### Install
+Create and activate a virtual environment, then install the shared requirements followed by the editable package (including dev extras):
 ```
 python -m venv .venv
 . .venv/Scripts/activate   # On Windows; use `source .venv/bin/activate` on macOS/Linux
+pip install -r requirements.txt
 pip install -e .[dev]
 ```
 
