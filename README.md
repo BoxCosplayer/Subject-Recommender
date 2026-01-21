@@ -9,30 +9,8 @@ Subject Recommender builds balanced study plans from assessment history and pred
 - Command-line entry point `subject-recommender` with an optional history reset flag plus runtime overrides for session timings, shot counts, and the active user.
 - Data utilities for creating synthetic history from predictions and cleaning revision artifacts directly in SQLite.
 
-## Repository Layout
-- `README.md`, `agents.md`, `CHANGELOG.md`, `pyproject.toml`: docs and configuration.
-- `data/`: SQLite database (`database.sqlite`), schema reference (`schema.txt`), and helper scripts (`generate_history_from_predicted.py`, `reset.py`, `migrate.py`).
-- `src/subject_recommender/`: library code (`config.py`, `io.py`, `cli.py`, `history_reset.py`, `preprocessing/`, `sessions/`).
-- `tests/`: unit tests mirroring the package surface.
-
-## Data Inputs
-- All data lives in `data/database.sqlite` (schema in `data/schema.txt`):
-  - `users(uuid, username, role)` must contain the active user ID from `config.DATABASE_USER_ID` (or the `--user-id` CLI override).
-  - `types(uuid, type, weight)` seeds assessment labels and their weights (e.g. Revision 0.1, Homework 0.2, Quiz 0.3, Topic Test 0.4, Mock Exam 0.5, Exam 0.6).
-  - `subjects(uuid, name)` lists the available subjects.
-  - `predictedGrades(predictedGradeID, userID, subjectID, score)` holds predicted grades (0-1) per subject for the configured user.
-  - `history(historyEntryID, userID, subjectID, typeID, score, studied_at)` stores study history with scores and ISO dates.
-- Date weighting uses `DATE_WEIGHT_ZERO_DAY_THRESHOLD`, `DATE_WEIGHT_MIN`, and `DATE_WEIGHT_MAX` from `config.py` to decay the impact of older results.
-
-## How the Pipeline Works
-1. **Weighting (`preprocessing.weighting`)**: applies assessment weights, adds a recency factor, and falls back to predicted grades when scores are non-positive.
-2. **Aggregation (`preprocessing.aggregation`)**: averages weighted totals, favouring weighted results when they exist and flooring combined scores to two decimal places.
-3. **Normalisation (`preprocessing.normalisation`)**: scales scores so they sum to one and selects the lowest-scoring subject as the next recommendation.
-4. **Session generation (`sessions.generator`)**: runs the pipeline for `SESSION_COUNT` sessions per shot, boosts the chosen subject to avoid repeats, appends revision entries plus penalties for skipped subjects, persists the new history, shuffles subject order for display, and can repeat for multiple shots.
-5. **CLI analysis (`cli.analyse_run`)**: reports shots executed, total sessions scheduled, unique subjects, and subject frequency.
-
 ## Usage
-### Install
+### Quick Install
 Create and activate a virtual environment, then install the shared requirements followed by the editable package (including dev extras):
 ```
 python -m venv .venv
@@ -55,7 +33,7 @@ subject-recommender --session-count 6 --session-time 40 --break-time 10 --shots 
 ```
 You can also run directly via Python: `python -m subject_recommender.cli`.
 
-### Programmatic use
+### (Advanced) Programmatic use
 ```python
 from subject_recommender.sessions import generate_session_plan
 
@@ -65,12 +43,28 @@ for plan in plans:
 ```
 Override inputs by passing a custom history sequence, session parameters (`count`, `session_time`, `break_time`, `shots`), or `session_date`.
 
-## Data Utilities
+## Data Inputs
+- All data lives in `data/database.sqlite` (schema in `data/schema.txt`):
+  - `users(uuid, username, role)` must contain the active user ID from `config.DATABASE_USER_ID` (or the `--user-id` CLI override).
+  - `types(uuid, type, weight)` seeds assessment labels and their weights (e.g. Revision 0.1, Homework 0.2, Quiz 0.3, Topic Test 0.4, Mock Exam 0.5, Exam 0.6).
+  - `subjects(uuid, name)` lists the available subjects.
+  - `predictedGrades(predictedGradeID, userID, subjectID, score)` holds predicted grades (0-1) per subject for the configured user.
+  - `history(historyEntryID, userID, subjectID, typeID, score, studied_at)` stores study history with scores and ISO dates.
+- Date weighting uses `DATE_WEIGHT_ZERO_DAY_THRESHOLD`, `DATE_WEIGHT_MIN`, and `DATE_WEIGHT_MAX` from `config.py` to decay the impact of older results.
+
+## How the Pipeline Works
+1. **Weighting (`preprocessing.weighting`)**: applies assessment weights, adds a recency factor, and falls back to predicted grades when scores are non-positive.
+2. **Aggregation (`preprocessing.aggregation`)**: averages weighted totals, favouring weighted results when they exist and flooring combined scores to two decimal places.
+3. **Normalisation (`preprocessing.normalisation`)**: scales scores so they sum to one and selects the lowest-scoring subject as the next recommendation.
+4. **Session generation (`sessions.generator`)**: runs the pipeline for `SESSION_COUNT` sessions per shot, boosts the chosen subject to avoid repeats, appends revision entries plus penalties for skipped subjects, persists the new history, shuffles subject order for display, and can repeat for multiple shots.
+5. **CLI analysis (`cli.analyse_run`)**: reports shots executed, total sessions scheduled, unique subjects, and subject frequency.
+
+## Utility Scripts
 - `src/subject_recommender/history_reset.py` and `data/reset.py`: delete `Revision` and `Not Studied` entries from the history table for the configured user.
 - `data/generate_history_from_predicted.py`: create synthetic history entries from predicted grades stored in SQLite (optional `--user-id`/`--database` overrides).
 - `data/migrate.py`: import legacy JSON predicted/history datasets into the SQLite schema for a specified user ID.
 
-## Tests and Quality
+## Tests
 - Unit tests: `pytest -q`
 - Lint: `ruff check .`
 - Format: `black .`
